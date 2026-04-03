@@ -98,11 +98,14 @@ export function SyncManager() {
         });
 
         if (resTxn.ok) {
-          const { syncedIds } = await resTxn.json();
+          const { syncedIds, deletedIds } = await resTxn.json();
           const syncedIdsSet = new Set(syncedIds);
-          allTxns = allTxns.map((t) =>
-            syncedIdsSet.has(t.id) ? { ...t, syncStatus: "synced" as const } : t
-          );
+          const deletedIdsSet = new Set(deletedIds ?? []);
+          allTxns = allTxns
+            .filter((t) => !deletedIdsSet.has(t.id))
+            .map((t) =>
+              syncedIdsSet.has(t.id) ? { ...t, syncStatus: "synced" as const } : t
+            );
           setItem(KEYS.TRANSACTIONS, allTxns);
         }
       }

@@ -27,9 +27,9 @@ export function useClosingReport() {
   const generateReport = useCallback((): DailyReport => {
     const today = getTodayKey();
     const allTxns = getItem<Transaction[]>(KEYS.TRANSACTIONS) ?? [];
-    const todayTxns = allTxns.filter((t) => t.date === today);
+    const todayTxns = allTxns.filter((t) => t.date === today && !t.deleted);
     const allExpenses = getItem<Expense[]>(KEYS.EXPENSES) ?? [];
-    const todayExpenses = allExpenses.filter((e) => e.date === today);
+    const todayExpenses = allExpenses.filter((e) => e.date === today && !e.deleted);
     const openingCash = getOpeningCash();
 
     const totalSales = todayTxns.reduce((s, t) => s + t.total, 0);

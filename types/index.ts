@@ -52,6 +52,7 @@ export interface Transaction {
   items: BillItemRecord[];
   total: number;
   paymentMode: PaymentMode;
+  deleted?: boolean;
   syncStatus?: "pending" | "synced";
 }
 

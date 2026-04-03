@@ -11,7 +11,7 @@ export function useTransactions() {
   const loadToday = useCallback(() => {
     const all = getItem<Transaction[]>(KEYS.TRANSACTIONS) ?? [];
     const today = getTodayKey();
-    return all.filter((t) => t.date === today);
+    return all.filter((t) => t.date === today && !t.deleted);
   }, []);
 
   useEffect(() => {
@@ -46,9 +46,15 @@ export function useTransactions() {
 
   const deleteTransaction = useCallback((id: string) => {
     const all = getItem<Transaction[]>(KEYS.TRANSACTIONS) ?? [];
-    const updated = all.filter((t) => t.id !== id);
+    const updated = all.map((t) =>
+      t.id === id ? { ...t, deleted: true, syncStatus: "pending" as const } : t
+    );
     setItem(KEYS.TRANSACTIONS, updated);
-    setTransactions(updated.filter((t) => t.date === getTodayKey()));
+    setTransactions(updated.filter((t) => t.date === getTodayKey() && !t.deleted));
+    
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("syncRequested"));
+    }
   }, []);
 
   const getDailySummary = useCallback((): DailySummary => {
@@ -73,7 +79,7 @@ export function useTransactions() {
 
   const getTransactionsByDate = useCallback((date: string): Transaction[] => {
     const all = getItem<Transaction[]>(KEYS.TRANSACTIONS) ?? [];
-    return all.filter((t) => t.date === date);
+    return all.filter((t) => t.date === date && !t.deleted);
   }, []);
 
   return {
