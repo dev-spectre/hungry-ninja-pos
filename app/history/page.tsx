@@ -165,7 +165,7 @@ export default function HistoryPage() {
         >
           <Clock size={40} strokeWidth={1.2} />
           <p className="text-sm">No transactions on this date</p>
-          <a href="/billing" className="text-xs" style={{ color: "var(--accent)" }}>
+          <a href="/" className="text-xs" style={{ color: "var(--accent)" }}>
             Go to Billing →
           </a>
         </div>

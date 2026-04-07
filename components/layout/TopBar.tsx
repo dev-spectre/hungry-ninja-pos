@@ -1,12 +1,13 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { Sun, Moon } from "lucide-react";
+import { Sun, Moon, LayoutDashboardIcon } from "lucide-react";
 import { useTheme } from "@/components/layout/ThemeProvider";
+import Link from "next/link";
 
 const titles: Record<string, string> = {
-  "/": "Dashboard",
-  "/billing": "New Bill",
+  "/dashboard": "Dashboard",
+  "/": "New Bill",
   "/history": "Sales History",
   "/admin": "Product Admin",
   "/expenses": "Expenses",
@@ -26,23 +27,19 @@ export default function TopBar() {
         background: "var(--bg-secondary)",
         borderBottom: "1px solid var(--border)",
         height: "52px",
-      }}
-    >
+      }}>
       <div className="flex items-center gap-2">
-        <div
-          className="w-7 h-7 rounded-lg flex items-center justify-center text-white font-bold text-sm"
-          style={{ background: "linear-gradient(135deg, var(--accent), #8b5cf6)" }}
-        >
+        <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white font-bold text-sm" style={{ background: "linear-gradient(135deg, var(--accent), #8b5cf6)" }}>
           T
         </div>
-        <span
-          className="font-semibold text-base"
-          style={{ color: "var(--text-primary)" }}
-        >
+        <span className="font-semibold text-base" style={{ color: "var(--text-primary)" }}>
           {title}
         </span>
       </div>
-      <div className="ml-auto flex items-center gap-2">
+      <div className="ml-auto flex items-center gap-4">
+        <Link href="/dashboard" className="text-sm flex gap-1 flex-col items-center justify-between font-medium text-(--text-muted) hover:text-(--accent)">
+          <LayoutDashboardIcon size={16} />
+        </Link>
         {/* Dark Mode Toggle */}
         <button
           onClick={toggle}
@@ -52,8 +49,7 @@ export default function TopBar() {
             background: "var(--bg-elevated)",
             border: "1px solid var(--border)",
             color: "var(--text-secondary)",
-          }}
-        >
+          }}>
           {isDark ? <Sun size={16} /> : <Moon size={16} />}
         </button>
       </div>

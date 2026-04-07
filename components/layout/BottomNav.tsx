@@ -11,8 +11,7 @@ import {
 } from "lucide-react";
 
 const navItems = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/billing", label: "Billing", icon: ShoppingCart },
+  { href: "/", label: "Billing", icon: ShoppingCart },
   { href: "/history", label: "History", icon: History },
   { href: "/expenses", label: "Expenses", icon: Receipt },
   { href: "/admin", label: "Admin", icon: Settings },

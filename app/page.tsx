@@ -1,180 +1,183 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
-import {
-  IndianRupee,
-  Banknote,
-  Smartphone,
-  CreditCard,
-  ShoppingBag,
-  CalendarDays,
-  Receipt,
-  TrendingDown,
-  FileBarChart,
-} from "lucide-react";
-import SummaryCard from "@/components/dashboard/SummaryCard";
-import TopProducts from "@/components/dashboard/TopProducts";
-import SlowMovingAlert from "@/components/dashboard/SlowMovingAlert";
-import { useTransactions } from "@/hooks/useTransactions";
-import { useExpenses } from "@/hooks/useExpenses";
+import { useState, useCallback, useEffect } from "react";
 import { useProducts } from "@/hooks/useProducts";
-import { DailySummary } from "@/types";
-import { formatCurrency, formatDate, getTodayKey } from "@/lib/utils";
-import Link from "next/link";
+import { useBill } from "@/hooks/useBill";
+import { useTransactions } from "@/hooks/useTransactions";
+import { PaymentMode, Product } from "@/types";
+import CategoryTabs from "@/components/billing/CategoryTabs";
+import SearchBar from "@/components/billing/SearchBar";
+import ProductCard from "@/components/billing/ProductCard";
+import BillPanel from "@/components/billing/BillPanel";
+import PaymentButtons from "@/components/billing/PaymentButtons";
+import { CheckCircle, X } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
+import { getItem, KEYS } from "@/lib/storage";
 
-export default function DashboardPage() {
-  const { getDailySummary, transactions } = useTransactions();
-  const { getTotalToday } = useExpenses();
-  const { products } = useProducts();
+export default function BillingPage() {
+  const { products, categories, initialized, getProductsByCategory, incrementFrequency } = useProducts();
+  const { items, grandTotal, addItem, updateQuantity, removeItem, clearBill, toBillRecords, isEmpty } = useBill();
+  const { saveTransaction } = useTransactions();
 
-  const [summary, setSummary] = useState<DailySummary>({
-    totalSales: 0,
-    cashSales: 0,
-    upiSales: 0,
-    cardSales: 0,
-    totalItems: 0,
-  });
-  const [totalExpenses, setTotalExpenses] = useState(0);
+  const [activeCategoryId, setActiveCategoryId] = useState<string>("__all__");
+  const [toast, setToast] = useState<string | null>(null);
+  const [billOpen, setBillOpen] = useState(false);
+  const [showUpiQr, setShowUpiQr] = useState(false);
+  const [upiId, setUpiId] = useState<string>("");
 
   useEffect(() => {
-    setSummary(getDailySummary());
-    setTotalExpenses(getTotalToday());
-  }, [transactions, getDailySummary, getTotalToday]);
+    // Load UPI ID if configured
+    setUpiId(getItem<string>(KEYS.UPI_ID) ?? "");
+  }, []);
 
-  const netProfit = summary.totalSales - totalExpenses;
-  const todayLabel = formatDate(getTodayKey());
-  const txnCount = transactions.length;
+  // Use initialized categories
+  const displayCategories = categories.length > 0 ? [{ id: "__all__", name: "All" }, ...categories.filter((c) => !(c as any).deleted)] : [{ id: "__all__", name: "All" }];
 
-  const cards = [
-    {
-      label: "Total Sales Today",
-      value: formatCurrency(summary.totalSales),
-      icon: <IndianRupee size={20} />,
-      color: "var(--accent)",
-      bgColor: "var(--accent-soft)",
-      subtitle: `${txnCount} bills`,
+  // Ensure activeCategoryId is valid
+  const resolvedCategoryId = displayCategories.find((c) => c.id === activeCategoryId)?.id ?? displayCategories[0]?.id ?? "starters";
+
+  const activeProducts = initialized ? getProductsByCategory(resolvedCategoryId) : [];
+
+  const showToast = useCallback((msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2500);
+  }, []);
+
+  const completePayment = useCallback(
+    (mode: PaymentMode) => {
+      const records = toBillRecords();
+      saveTransaction(records, grandTotal, mode);
+      const ids = items.map((i) => i.product.id);
+      incrementFrequency(ids);
+      clearBill();
+      setBillOpen(false);
+      setShowUpiQr(false);
+      showToast(`₹${grandTotal.toFixed(2)} paid via ${mode.toUpperCase()} ✓`);
     },
-    {
-      label: "Cash Sales",
-      value: formatCurrency(summary.cashSales),
-      icon: <Banknote size={20} />,
-      color: "var(--green)",
-      bgColor: "var(--green-soft)",
+    [toBillRecords, saveTransaction, grandTotal, items, incrementFrequency, clearBill, showToast],
+  );
+
+  const handlePay = useCallback(
+    (mode: PaymentMode) => {
+      if (isEmpty) return;
+      if (mode === "upi" && upiId) {
+        setShowUpiQr(true);
+      } else {
+        completePayment(mode);
+      }
     },
-    {
-      label: "UPI Sales",
-      value: formatCurrency(summary.upiSales),
-      icon: <Smartphone size={20} />,
-      color: "var(--yellow)",
-      bgColor: "var(--yellow-soft)",
-    },
-    {
-      label: "Card Sales",
-      value: formatCurrency(summary.cardSales),
-      icon: <CreditCard size={20} />,
-      color: "var(--blue)",
-      bgColor: "var(--blue-soft)",
-    },
-    {
-      label: "Total Items Sold",
-      value: summary.totalItems.toString(),
-      icon: <ShoppingBag size={20} />,
-      color: "var(--purple)",
-      bgColor: "var(--purple-soft)",
-    },
-    {
-      label: "Total Expenses",
-      value: formatCurrency(totalExpenses),
-      icon: <Receipt size={20} />,
-      color: "var(--orange)",
-      bgColor: "var(--orange-soft)",
-    },
-    {
-      label: "Net Profit",
-      value: formatCurrency(netProfit),
-      icon: <TrendingDown size={20} />,
-      color: netProfit >= 0 ? "var(--green)" : "var(--red)",
-      bgColor: netProfit >= 0 ? "var(--green-soft)" : "var(--red-soft)",
-    },
-  ];
+    [isEmpty, completePayment, upiId],
+  );
+
+  const getQuantityInBill = (productId: string) => items.find((i) => i.product.id === productId)?.quantity ?? 0;
+
+  const totalItems = items.reduce((s, i) => s + i.quantity, 0);
+
+  const qrValue = `upi://pay?pa=${upiId}&pn=Merchant&am=${grandTotal.toFixed(2)}&cu=INR`;
 
   return (
-    <div className="p-4 space-y-4">
-      {/* Date Banner */}
-      <div
-        className="rounded-2xl p-4 flex items-center gap-3"
-        style={{
-          background: "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)",
-        }}
-      >
-        <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
-          <CalendarDays size={22} className="text-white" />
+    <div className="flex flex-col h-full relative">
+      {/* Toast Notification */}
+      {toast && (
+        <div className="fixed top-14 left-0 right-0 z-50 flex justify-center pointer-events-none">
+          <div className="flex items-center gap-2 px-4 py-3 rounded-2xl shadow-xl animate-pulse" style={{ background: "var(--green)", color: "#fff", maxWidth: "90vw" }}>
+            <CheckCircle size={18} />
+            <span className="font-semibold text-sm">{toast}</span>
+          </div>
         </div>
-        <div>
-          <p className="text-white font-semibold text-base leading-tight">{todayLabel}</p>
-          <p className="text-white/70 text-xs">Live Sales Dashboard</p>
+      )}
+
+      {/* UPI QR Code Modal */}
+      {showUpiQr && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-opacity">
+          <div className="bg-white rounded-3xl p-6 w-full max-w-sm flex flex-col items-center shadow-2xl animate-in zoom-in-95 duration-200">
+            <h3 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-1">Scan to Pay</h3>
+            <p className="text-gray-500 font-medium text-sm mb-6">via any UPI App</p>
+
+            <div className="bg-white p-3 rounded-2xl shadow-sm border-2 border-slate-100 mb-6">
+              <QRCodeSVG value={qrValue} size={200} level="M" />
+            </div>
+
+            <div className="w-full bg-slate-50 rounded-2xl p-4 mb-6">
+              <div className="flex justify-between items-center mb-1">
+                <span className="text-gray-500 text-sm font-medium">Amount</span>
+                <span className="text-xl font-extrabold text-slate-800">₹{grandTotal.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-500 text-sm font-medium">To</span>
+                <span className="text-sm font-semibold text-slate-700 truncate max-w-[150px]">{upiId}</span>
+              </div>
+            </div>
+
+            <div className="flex gap-3 w-full">
+              <button onClick={() => setShowUpiQr(false)} className="flex-1 py-3.5 rounded-xl font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors">
+                Cancel
+              </button>
+              <button
+                onClick={() => completePayment("upi")}
+                className="flex-1 py-3.5 rounded-xl font-bold text-white shadow-lg shadow-indigo-200 transition-transform active:scale-95"
+                style={{ background: "linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)" }}>
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Product Section */}
+      <div className="flex flex-col flex-1 min-h-0">
+        {/* Search */}
+        <div className="pt-2">
+          <SearchBar products={products.filter((p) => p.active && !(p as any).deleted)} onSelect={(p: Product) => addItem(p)} />
+        </div>
+
+        {/* Category Tabs */}
+        <CategoryTabs categories={displayCategories} activeId={resolvedCategoryId} onSelect={setActiveCategoryId} />
+
+        {/* Products Grid */}
+        <div className="flex-1 overflow-y-auto px-4 pb-2">
+          {activeProducts.length === 0 ? (
+            <div className="flex items-center justify-center h-24 text-sm" style={{ color: "var(--text-muted)" }}>
+              No active products in this category
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-2">
+              {activeProducts.map((product) => (
+                <ProductCard key={product.id} product={product} onAdd={addItem} quantity={getQuantityInBill(product.id)} />
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Summary Cards Grid */}
-      <div className="grid grid-cols-2 gap-3">
-        {/* Total Sales — full width */}
-        <div className="col-span-2">
-          <SummaryCard {...cards[0]} />
-        </div>
-        {/* Cash, UPI, Card, Items */}
-        {cards.slice(1, 5).map((card) => (
-          <SummaryCard key={card.label} {...card} />
-        ))}
-        {/* Expenses + Net Profit — full width each */}
-        <SummaryCard {...cards[5]} />
-        <SummaryCard {...cards[6]} />
-      </div>
-
-      {/* Top Products */}
-      <TopProducts transactions={transactions} />
-
-      {/* Slow Moving Alert */}
-      <SlowMovingAlert products={products} transactions={transactions} threshold={2} />
-
-      {/* Quick Actions */}
-      <div
-        className="rounded-2xl p-4"
-        style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
-      >
-        <p className="text-xs font-semibold mb-2" style={{ color: "var(--text-secondary)" }}>
-          Quick Actions
-        </p>
-        <div className="grid grid-cols-2 gap-2">
-          <Link
-            href="/billing"
-            className="flex items-center gap-2 p-3 rounded-xl font-medium text-sm transition-all active:scale-95"
-            style={{ background: "var(--accent-soft)", color: "var(--accent)" }}
-          >
-            <ShoppingBag size={16} /> New Bill
-          </Link>
-          <Link
-            href="/expenses"
-            className="flex items-center gap-2 p-3 rounded-xl font-medium text-sm transition-all active:scale-95"
-            style={{ background: "var(--orange-soft)", color: "var(--orange)" }}
-          >
-            <Receipt size={16} /> Add Expense
-          </Link>
-          <Link
-            href="/history"
-            className="flex items-center gap-2 p-3 rounded-xl font-medium text-sm transition-all active:scale-95"
-            style={{ background: "var(--green-soft)", color: "var(--green)" }}
-          >
-            <CalendarDays size={16} /> View History
-          </Link>
-          <Link
-            href="/closing"
-            className="flex items-center gap-2 p-3 rounded-xl font-medium text-sm transition-all active:scale-95"
-            style={{ background: "var(--purple-soft)", color: "var(--purple)" }}
-          >
-            <FileBarChart size={16} /> Close Day
-          </Link>
-        </div>
+      {/* Bottom Bill Sheet Trigger */}
+      <div className="shrink-0 px-4 py-3" style={{ borderTop: "1px solid var(--border)", background: "var(--bg-secondary)" }}>
+        {!billOpen ? (
+          <button
+            onClick={() => setBillOpen(true)}
+            className="w-full flex items-center justify-between px-4 py-3 rounded-2xl font-semibold text-sm transition-all active:scale-95"
+            style={{
+              background: isEmpty ? "var(--bg-elevated)" : "var(--accent)",
+              color: isEmpty ? "var(--text-muted)" : "#fff",
+              border: isEmpty ? "1px solid var(--border)" : "none",
+            }}>
+            <span>{isEmpty ? "No items in bill" : `View Bill (${totalItems} items)`}</span>
+            {!isEmpty && <span className="font-extrabold">₹{grandTotal.toFixed(2)}</span>}
+          </button>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="font-semibold text-sm" style={{ color: "var(--text-primary)" }}>
+                Current Bill
+              </h3>
+              <button onClick={() => setBillOpen(false)} className="text-xs" style={{ color: "var(--text-muted)" }}>
+                ▲ Collapse
+              </button>
+            </div>
+            <BillPanel items={items} grandTotal={grandTotal} onUpdateQty={updateQuantity} onRemove={removeItem} onClear={clearBill} />
+            <PaymentButtons onPay={handlePay} disabled={isEmpty} />
+          </div>
+        )}
       </div>
     </div>
   );
