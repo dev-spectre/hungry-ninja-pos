@@ -4,7 +4,7 @@ import { useTransactions } from "@/hooks/useTransactions";
 import { Transaction } from "@/types";
 import { formatTime, formatCurrency } from "@/lib/utils";
 import { Trash2, ChevronDown, ChevronUp, Banknote, Smartphone, CreditCard, Clock } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 function PaymentBadge({ mode }: { mode: string }) {
   const config = {
@@ -113,10 +113,17 @@ export default function HistoryPage() {
     const today = new Date();
     return today.toISOString().split("T")[0];
   });
+  const [displayTransactions, setDisplayTransactions] = useState<Transaction[]>([]);
 
-  const displayTransactions = selectedDate === new Date().toISOString().split("T")[0] 
-    ? transactions 
-    : getTransactionsByDate(selectedDate);
+  // When date changes, fetch transactions
+  useEffect(() => {
+    const today = new Date().toISOString().split("T")[0];
+    if (selectedDate === today) {
+      setDisplayTransactions(transactions);
+    } else {
+      getTransactionsByDate(selectedDate).then(setDisplayTransactions);
+    }
+  }, [selectedDate, transactions, getTransactionsByDate]);
 
   const sorted = [...displayTransactions].sort((a, b) => b.timestamp - a.timestamp);
   const totalForDate = sorted.reduce((s, t) => s + t.total, 0);

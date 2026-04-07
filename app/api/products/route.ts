@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import type { Product } from "@/types";
 
 export async function GET() {
   try {
-    const products = await prisma.product.findMany();
+    const products = await prisma.product.findMany({
+      orderBy: { orderFrequency: "desc" },
+    });
     return NextResponse.json(products);
   } catch (error) {
     console.error("Failed to fetch products:", error);
@@ -18,45 +19,65 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { products } = body as { products: Product[] };
+    const { id, name, categoryId, price, active, orderFrequency } = body;
 
-    if (!products || !Array.isArray(products) || products.length === 0) {
-      return NextResponse.json(
-        { message: "No products to sync" },
-        { status: 400 }
-      );
+    const product = await prisma.product.create({
+      data: {
+        id,
+        name,
+        categoryId,
+        price,
+        active: active ?? true,
+        orderFrequency: orderFrequency ?? 0,
+      },
+    });
+
+    return NextResponse.json(product, { status: 201 });
+  } catch (error) {
+    console.error("Failed to create product:", error);
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PUT(request: Request) {
+  try {
+    const body = await request.json();
+    const { id, ...data } = body;
+
+    const product = await prisma.product.update({
+      where: { id },
+      data,
+    });
+
+    return NextResponse.json(product);
+  } catch (error) {
+    console.error("Failed to update product:", error);
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
+    if (!id) {
+      return NextResponse.json({ error: "Missing id" }, { status: 400 });
     }
 
-    const results = await prisma.$transaction(
-      products.map((prod) =>
-        prisma.product.upsert({
-          where: { id: prod.id },
-          create: {
-            id: prod.id,
-            name: prod.name,
-            price: prod.price,
-            active: prod.active,
-            orderFrequency: prod.orderFrequency,
-            categoryId: prod.categoryId,
-          },
-          update: {
-            name: prod.name,
-            price: prod.price,
-            active: prod.active,
-            orderFrequency: prod.orderFrequency,
-            categoryId: prod.categoryId,
-          },
-        })
-      )
-    );
+    await prisma.$transaction([
+      prisma.billItemRecord.deleteMany({ where: { productId: id } }),
+      prisma.product.delete({ where: { id } }),
+    ]);
 
-    return NextResponse.json({
-      success: true,
-      syncedCount: results.length,
-      syncedIds: results.map((r: { id: string }) => r.id),
-    });
+    return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Failed to sync products:", error);
+    console.error("Failed to delete product:", error);
     return NextResponse.json(
       { error: "Internal Server Error" },
       { status: 500 }

@@ -31,7 +31,7 @@ export default function BillingPage() {
   }, []);
 
   // Use initialized categories
-  const displayCategories = categories.length > 0 ? [{ id: "__all__", name: "All" }, ...categories.filter((c) => !(c as any).deleted)] : [{ id: "__all__", name: "All" }];
+  const displayCategories = categories.length > 0 ? [{ id: "__all__", name: "All" }, ...categories] : [{ id: "__all__", name: "All" }];
 
   // Ensure activeCategoryId is valid
   const resolvedCategoryId = displayCategories.find((c) => c.id === activeCategoryId)?.id ?? displayCategories[0]?.id ?? "starters";
@@ -128,7 +128,7 @@ export default function BillingPage() {
       <div className="flex flex-col flex-1 min-h-0">
         {/* Search */}
         <div className="pt-2">
-          <SearchBar products={products.filter((p) => p.active && !(p as any).deleted)} onSelect={(p: Product) => addItem(p)} />
+          <SearchBar products={products.filter((p) => p.active)} onSelect={(p: Product) => addItem(p)} />
         </div>
 
         {/* Category Tabs */}

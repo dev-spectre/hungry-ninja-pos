@@ -5,57 +5,53 @@ import { Category, Product } from "@/types";
 import { getItem, setItem, KEYS } from "@/lib/storage";
 import { generateId } from "@/lib/utils";
 
-function initializeData() {
-  const seeded = getItem<boolean>(KEYS.SEEDED);
-  if (!seeded) {
-    setItem(KEYS.CATEGORIES, []);
-    setItem(KEYS.PRODUCTS, []);
-    setItem(KEYS.SEEDED, true);
-  }
-}
+// In-memory flags to prevent redundant DB fetches across page navigations
+let sessionProductsFetched = false;
 
 export function useProducts() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [initialized, setInitialized] = useState(false);
 
+  // Load cached data instantly, then refresh from DB
   useEffect(() => {
-    initializeData();
-    const storedProducts = (getItem<Product[]>(KEYS.PRODUCTS) ?? []);
-    const storedCategories = (getItem<Category[]>(KEYS.CATEGORIES) ?? []);
-    setProducts(storedProducts);
-    setCategories(storedCategories);
+    let cancelled = false;
+
+    // 1. Instant load from cache
+    const cachedProducts = getItem<Product[]>(KEYS.CACHE_PRODUCTS);
+    const cachedCategories = getItem<Category[]>(KEYS.CACHE_CATEGORIES);
+    if (cachedProducts) setProducts(cachedProducts);
+    if (cachedCategories) setCategories(cachedCategories);
     setInitialized(true);
 
-    // Fetch fresh from server if online
-    if (navigator.onLine) {
-      fetch("/api/products")
-        .then((res) => res.json())
-        .then((serverProducts) => {
-          if (Array.isArray(serverProducts) && serverProducts.length > 0) {
-            // Merge: keep locally deleted items (pending sync) and add server items
-            const localDeleted = storedProducts.filter((p: Product) => p.deleted && p.syncStatus === "pending");
-            const localDeletedIds = new Set(localDeleted.map((p: Product) => p.id));
-            const syncedProducts = serverProducts
-              .filter((p: any) => !localDeletedIds.has(p.id))
-              .map((p: any) => ({ ...p, syncStatus: "synced" }));
-            const merged = [...localDeleted, ...syncedProducts];
-            setItem(KEYS.PRODUCTS, merged);
-            setProducts(merged);
-          }
-        })
-        .catch((err) => console.error("Failed to fetch products:", err));
-    }
-  }, []);
+    // 2. Skip DB refresh if we already fetched this session
+    if (sessionProductsFetched) return;
+    
+    // 3. Background refresh from DB
+    Promise.all([
+      fetch("/api/products").then((r) => r.ok ? r.json() : null),
+      fetch("/api/categories").then((r) => r.ok ? r.json() : null),
+    ])
+      .then(([prods, cats]) => {
+        if (cancelled) return;
+        let fetchedAny = false;
+        if (Array.isArray(prods)) {
+          setProducts(prods);
+          setItem(KEYS.CACHE_PRODUCTS, prods);
+          fetchedAny = true;
+        }
+        if (Array.isArray(cats)) {
+          setCategories(cats);
+          setItem(KEYS.CACHE_CATEGORIES, cats);
+          fetchedAny = true;
+        }
+        if (fetchedAny) {
+          sessionProductsFetched = true;
+        }
+      })
+      .catch((err) => console.error("Failed to refresh products/categories:", err));
 
-  const saveProducts = useCallback((updated: Product[]) => {
-    setItem(KEYS.PRODUCTS, updated);
-    setProducts(updated);
-  }, []);
-
-  const saveCategories = useCallback((updated: Category[]) => {
-    setItem(KEYS.CATEGORIES, updated);
-    setCategories(updated);
+    return () => { cancelled = true; };
   }, []);
 
   const addProduct = useCallback(
@@ -64,124 +60,175 @@ export function useProducts() {
         ...data,
         id: generateId(),
         orderFrequency: 0,
-        syncStatus: "pending",
       };
-      const updated = [...products, newProduct];
-      saveProducts(updated);
-      
-      // Trigger sync for new products
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new Event("syncRequested"));
-      }
+
+      setProducts((prev) => {
+        const updated = [...prev, newProduct];
+        setItem(KEYS.CACHE_PRODUCTS, updated);
+        return updated;
+      });
+
+      fetch("/api/products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newProduct),
+      }).catch((err) => console.error("Failed to save product:", err));
     },
-    [products, saveProducts]
+    []
   );
 
   const updateProduct = useCallback(
     (id: string, data: Partial<Omit<Product, "id">>) => {
-      const updated = products.map((p) =>
-        p.id === id ? { ...p, ...data, syncStatus: "pending" as const } : p
-      );
-      saveProducts(updated);
-      
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new Event("syncRequested"));
-      }
+      setProducts((prev) => {
+        const updated = prev.map((p) => (p.id === id ? { ...p, ...data } : p));
+        setItem(KEYS.CACHE_PRODUCTS, updated);
+        return updated;
+      });
+
+      fetch("/api/products", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, ...data }),
+      }).catch((err) => console.error("Failed to update product:", err));
     },
-    [products, saveProducts]
+    []
   );
 
   const deleteProduct = useCallback(
     (id: string) => {
-      const updated = products.map((p) =>
-        p.id === id ? { ...p, deleted: true, syncStatus: "pending" as const } : p
+      setProducts((prev) => {
+        const updated = prev.filter((p) => p.id !== id);
+        setItem(KEYS.CACHE_PRODUCTS, updated);
+        return updated;
+      });
+
+      fetch(`/api/products?id=${id}`, { method: "DELETE" }).catch((err) =>
+        console.error("Failed to delete product:", err)
       );
-      saveProducts(updated);
-      
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new Event("syncRequested"));
-      }
     },
-    [products, saveProducts]
+    []
   );
 
   const toggleActive = useCallback(
     (id: string) => {
-      const updated = products.map((p) =>
-        p.id === id ? { ...p, active: !p.active, syncStatus: "pending" as const } : p
-      );
-      saveProducts(updated);
-      
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new Event("syncRequested"));
-      }
+      setProducts((prev) => {
+        const product = prev.find((p) => p.id === id);
+        if (!product) return prev;
+        const newActive = !product.active;
+
+        fetch("/api/products", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id, active: newActive }),
+        }).catch((err) => console.error("Failed to toggle product:", err));
+
+        const updated = prev.map((p) =>
+          p.id === id ? { ...p, active: newActive } : p
+        );
+        setItem(KEYS.CACHE_PRODUCTS, updated);
+        return updated;
+      });
     },
-    [products, saveProducts]
+    []
   );
 
   const incrementFrequency = useCallback(
     (productIds: string[]) => {
-      const updated = products.map((p) =>
-        productIds.includes(p.id)
-          ? { ...p, orderFrequency: p.orderFrequency + 1, syncStatus: "pending" as const }
-          : p
-      );
-      saveProducts(updated);
-      
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new Event("syncRequested"));
-      }
+      setProducts((prev) => {
+        const updates: { id: string; orderFrequency: number }[] = [];
+        const updated = prev.map((p) => {
+          if (productIds.includes(p.id)) {
+            const newFreq = p.orderFrequency + 1;
+            updates.push({ id: p.id, orderFrequency: newFreq });
+            return { ...p, orderFrequency: newFreq };
+          }
+          return p;
+        });
+
+        setItem(KEYS.CACHE_PRODUCTS, updated);
+
+        if (updates.length > 0) {
+          const productIds = updates.map((u) => u.id);
+          fetch("/api/products/bulk-frequency", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ productIds }),
+          }).catch((err) => console.error("Failed to bulk update frequency:", err));
+        }
+
+        return updated;
+      });
     },
-    [products, saveProducts]
+    []
   );
 
   const addCategory = useCallback(
     (name: string) => {
       const id = name.toLowerCase().replace(/\s+/g, "-");
-      if (categories.some((c) => c.id === id)) return;
-      const newCat: Category = { id, name, syncStatus: "pending" };
-      const updated = [...categories, newCat];
-      saveCategories(updated);
-      
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new Event("syncRequested"));
-      }
+
+      setCategories((prev) => {
+        if (prev.some((c) => c.id === id)) return prev;
+        const newCat: Category = { id, name };
+        const updated = [...prev, newCat];
+        setItem(KEYS.CACHE_CATEGORIES, updated);
+
+        fetch("/api/categories", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(newCat),
+        }).catch((err) => console.error("Failed to save category:", err));
+
+        return updated;
+      });
     },
-    [categories, saveCategories]
+    []
   );
 
   const updateCategory = useCallback(
     (id: string, name: string) => {
-      const updated = categories.map((c) =>
-        c.id === id ? { ...c, name, syncStatus: "pending" as const } : c
-      );
-      saveCategories(updated);
-      
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new Event("syncRequested"));
-      }
+      setCategories((prev) => {
+        const updated = prev.map((c) => (c.id === id ? { ...c, name } : c));
+        setItem(KEYS.CACHE_CATEGORIES, updated);
+        return updated;
+      });
+
+      fetch("/api/categories", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, name }),
+      }).catch((err) => console.error("Failed to update category:", err));
     },
-    [categories, saveCategories]
+    []
   );
 
   const deleteCategory = useCallback(
     (id: string) => {
-      const updated = categories.map((c) =>
-        c.id === id ? { ...c, deleted: true, syncStatus: "pending" as const } : c
+      setCategories((prev) => {
+        const updated = prev.filter((c) => c.id !== id);
+        setItem(KEYS.CACHE_CATEGORIES, updated);
+        return updated;
+      });
+      setProducts((prev) => {
+        const updated = prev.filter((p) => p.categoryId !== id);
+        setItem(KEYS.CACHE_PRODUCTS, updated);
+        return updated;
+      });
+
+      fetch(`/api/categories?id=${id}`, { method: "DELETE" }).catch((err) =>
+        console.error("Failed to delete category:", err)
       );
-      saveCategories(updated);
-      
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new Event("syncRequested"));
-      }
     },
-    [categories, saveCategories]
+    []
   );
 
   const getProductsByCategory = useCallback(
     (categoryId: string) => {
       return products
-        .filter((p) => !p.deleted && p.active && (categoryId === "__all__" || p.categoryId === categoryId))
+        .filter(
+          (p) =>
+            p.active &&
+            (categoryId === "__all__" || p.categoryId === categoryId)
+        )
         .sort((a, b) => b.orderFrequency - a.orderFrequency);
     },
     [products]

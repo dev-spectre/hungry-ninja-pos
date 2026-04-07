@@ -5,22 +5,43 @@ import { Transaction, BillItemRecord, PaymentMode, DailySummary } from "@/types"
 import { getItem, setItem, KEYS } from "@/lib/storage";
 import { getTodayKey, generateId } from "@/lib/utils";
 
+// In-memory flag for dates successfully fetched this session
+const sessionFetchedDates = new Set<string>();
+
 export function useTransactions() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
 
-  const loadToday = useCallback(() => {
-    const all = getItem<Transaction[]>(KEYS.TRANSACTIONS) ?? [];
-    const today = getTodayKey();
-    return all.filter((t) => t.date === today && !t.deleted);
-  }, []);
-
+  // Load cached, then refresh from DB
   useEffect(() => {
-    setTransactions(loadToday());
-  }, [loadToday]);
+    let cancelled = false;
+    const today = getTodayKey();
+
+    // 1. Instant load from cache (filter to today)
+    const cached = getItem<Transaction[]>(KEYS.CACHE_TRANSACTIONS);
+    if (cached) {
+      setTransactions(cached.filter((t) => t.date === today));
+    }
+
+    // 2. Skip DB refresh if we already fetched today's data this session
+    if (sessionFetchedDates.has(today)) return;
+
+    // 3. Background refresh from DB
+    fetch(`/api/transactions?date=${today}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (!cancelled && Array.isArray(data)) {
+          setTransactions(data);
+          setItem(KEYS.CACHE_TRANSACTIONS, data);
+          sessionFetchedDates.add(today);
+        }
+      })
+      .catch((err) => console.error("Failed to load transactions:", err));
+
+    return () => { cancelled = true; };
+  }, []);
 
   const saveTransaction = useCallback(
     (items: BillItemRecord[], total: number, paymentMode: PaymentMode): Transaction => {
-      const all = getItem<Transaction[]>(KEYS.TRANSACTIONS) ?? [];
       const txn: Transaction = {
         id: generateId(),
         date: getTodayKey(),
@@ -28,16 +49,19 @@ export function useTransactions() {
         items,
         total,
         paymentMode,
-        syncStatus: "pending",
       };
-      const updated = [...all, txn];
-      setItem(KEYS.TRANSACTIONS, updated);
-      setTransactions(updated.filter((t) => t.date === getTodayKey()));
-      
-      // Trigger global sync event
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new Event("syncRequested"));
-      }
+
+      setTransactions((prev) => {
+        const updated = [...prev, txn];
+        setItem(KEYS.CACHE_TRANSACTIONS, updated);
+        return updated;
+      });
+
+      fetch("/api/transactions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(txn),
+      }).catch((err) => console.error("Failed to save transaction:", err));
 
       return txn;
     },
@@ -45,42 +69,54 @@ export function useTransactions() {
   );
 
   const deleteTransaction = useCallback((id: string) => {
-    const all = getItem<Transaction[]>(KEYS.TRANSACTIONS) ?? [];
-    const updated = all.map((t) =>
-      t.id === id ? { ...t, deleted: true, syncStatus: "pending" as const } : t
+    setTransactions((prev) => {
+      const updated = prev.filter((t) => t.id !== id);
+      setItem(KEYS.CACHE_TRANSACTIONS, updated);
+      return updated;
+    });
+
+    fetch(`/api/transactions?id=${id}`, { method: "DELETE" }).catch((err) =>
+      console.error("Failed to delete transaction:", err)
     );
-    setItem(KEYS.TRANSACTIONS, updated);
-    setTransactions(updated.filter((t) => t.date === getTodayKey() && !t.deleted));
-    
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new Event("syncRequested"));
-    }
   }, []);
 
   const getDailySummary = useCallback((): DailySummary => {
-    const today = loadToday();
     return {
-      totalSales: today.reduce((s, t) => s + t.total, 0),
-      cashSales: today
+      totalSales: transactions.reduce((s, t) => s + t.total, 0),
+      cashSales: transactions
         .filter((t) => t.paymentMode === "cash")
         .reduce((s, t) => s + t.total, 0),
-      upiSales: today
+      upiSales: transactions
         .filter((t) => t.paymentMode === "upi")
         .reduce((s, t) => s + t.total, 0),
-      cardSales: today
+      cardSales: transactions
         .filter((t) => t.paymentMode === "card")
         .reduce((s, t) => s + t.total, 0),
-      totalItems: today.reduce(
+      totalItems: transactions.reduce(
         (s, t) => s + t.items.reduce((is, i) => is + i.quantity, 0),
         0
       ),
     };
-  }, [loadToday]);
+  }, [transactions]);
 
-  const getTransactionsByDate = useCallback((date: string): Transaction[] => {
-    const all = getItem<Transaction[]>(KEYS.TRANSACTIONS) ?? [];
-    return all.filter((t) => t.date === date && !t.deleted);
-  }, []);
+  const getTransactionsByDate = useCallback(
+    async (date: string): Promise<Transaction[]> => {
+      try {
+        const res = await fetch(`/api/transactions?date=${date}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data)) {
+            sessionFetchedDates.add(date);
+            return data;
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch transactions by date:", err);
+      }
+      return [];
+    },
+    []
+  );
 
   return {
     transactions,
@@ -88,6 +124,17 @@ export function useTransactions() {
     deleteTransaction,
     getDailySummary,
     getTransactionsByDate,
-    refreshTransactions: () => setTransactions(loadToday()),
+    refreshTransactions: () => {
+      const today = getTodayKey();
+      fetch(`/api/transactions?date=${today}`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (Array.isArray(data)) {
+            setTransactions(data);
+            setItem(KEYS.CACHE_TRANSACTIONS, data);
+          }
+        })
+        .catch(console.error);
+    },
   };
 }

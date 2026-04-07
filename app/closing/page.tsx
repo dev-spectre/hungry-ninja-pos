@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useClosingReport } from "@/hooks/useClosingReport";
+import { useTransactions } from "@/hooks/useTransactions";
+import { useExpenses } from "@/hooks/useExpenses";
 import { DailyReport } from "@/types";
 import { formatCurrency, formatDate, formatTime, getTodayKey } from "@/lib/utils";
 import {
@@ -93,6 +95,8 @@ function ReportRow({ label, value, color, icon: Icon }: { label: string; value: 
 
 export default function ClosingPage() {
   const { getOpeningCash, setOpeningCash, generateReport, closeDay } = useClosingReport();
+  const { transactions } = useTransactions();
+  const { getTodayExpenses } = useExpenses();
 
   const [openingCash, setOpeningCashState] = useState(0);
   const [openingInput, setOpeningInput] = useState("");
@@ -118,17 +122,19 @@ export default function ClosingPage() {
     setOpeningSet(true);
   };
 
-  const handleGenerate = useCallback(() => {
-    const r = generateReport();
+  const handleGenerate = useCallback(async () => {
+    const todayExpenses = getTodayExpenses();
+    const r = await generateReport(transactions, todayExpenses);
     setReport(r);
-  }, [generateReport]);
+  }, [generateReport, transactions, getTodayExpenses]);
 
-  const handleCloseDayConfirmed = useCallback(() => {
+  const handleCloseDayConfirmed = useCallback(async () => {
     setShowPinForClose(false);
-    const r = closeDay();
+    const todayExpenses = getTodayExpenses();
+    const r = await closeDay(transactions, todayExpenses);
     setReport(r);
     setDayClosed(true);
-  }, [closeDay]);
+  }, [closeDay, transactions, getTodayExpenses]);
 
   // ── Export CSV ──────────────────────────────────────────────────
   const exportCSV = useCallback(() => {

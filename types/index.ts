@@ -25,8 +25,6 @@ export interface Category {
   id: string;
   name: string;
   isDefault?: boolean;
-  deleted?: boolean;
-  syncStatus?: "pending" | "synced";
 }
 
 export interface Product {
@@ -36,8 +34,6 @@ export interface Product {
   price: number;
   active: boolean;
   orderFrequency: number;
-  deleted?: boolean;
-  syncStatus?: "pending" | "synced";
 }
 
 export interface BillItem {
@@ -52,8 +48,6 @@ export interface Transaction {
   items: BillItemRecord[];
   total: number;
   paymentMode: PaymentMode;
-  deleted?: boolean;
-  syncStatus?: "pending" | "synced";
 }
 
 export interface BillItemRecord {
@@ -80,8 +74,6 @@ export interface Expense {
   date: string; // YYYY-MM-DD
   notes?: string;
   createdAt: number; // Unix ms
-  deleted?: boolean;
-  syncStatus?: "pending" | "synced";
 }
 
 export interface ProductSalesStat {
@@ -102,7 +94,6 @@ export interface DailyReport {
   transactionCount: number;
   transactions: Transaction[];
   expenses: Expense[];
-  syncStatus?: "pending" | "synced";
 }
 
 export interface AppSettings {

@@ -30,7 +30,7 @@ export default function ExpensesPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [filterDate, setFilterDate] = useState(getTodayKey());
 
-  const filtered = expenses.filter((e) => e.date === filterDate && !e.deleted);
+  const filtered = expenses.filter((e) => e.date === filterDate);
   const total = filtered.reduce((s, e) => s + e.amount, 0);
 
   function getCatLabel(val: string) {

@@ -24,73 +24,80 @@ export function useClosingReport() {
     });
   }, []);
 
-  const generateReport = useCallback((): DailyReport => {
-    const today = getTodayKey();
-    const allTxns = getItem<Transaction[]>(KEYS.TRANSACTIONS) ?? [];
-    const todayTxns = allTxns.filter((t) => t.date === today && !t.deleted);
-    const allExpenses = getItem<Expense[]>(KEYS.EXPENSES) ?? [];
-    const todayExpenses = allExpenses.filter((e) => e.date === today && !e.deleted);
-    const openingCash = getOpeningCash();
+  const generateReport = useCallback(
+    async (todayTxns: Transaction[], todayExpenses: Expense[]): Promise<DailyReport> => {
+      const today = getTodayKey();
+      const openingCash = getOpeningCash();
 
-    const totalSales = todayTxns.reduce((s, t) => s + t.total, 0);
-    const cashSales = todayTxns
-      .filter((t) => t.paymentMode === "cash")
-      .reduce((s, t) => s + t.total, 0);
-    const upiSales = todayTxns
-      .filter((t) => t.paymentMode === "upi")
-      .reduce((s, t) => s + t.total, 0);
-    const cardSales = todayTxns
-      .filter((t) => t.paymentMode === "card")
-      .reduce((s, t) => s + t.total, 0);
-    const totalItems = todayTxns.reduce(
-      (s, t) => s + t.items.reduce((is, i) => is + i.quantity, 0),
-      0
-    );
-    const totalExpenses = todayExpenses.reduce((s, e) => s + e.amount, 0);
-    const netProfit = totalSales - totalExpenses;
+      const totalSales = todayTxns.reduce((s, t) => s + t.total, 0);
+      const cashSales = todayTxns
+        .filter((t) => t.paymentMode === "cash")
+        .reduce((s, t) => s + t.total, 0);
+      const upiSales = todayTxns
+        .filter((t) => t.paymentMode === "upi")
+        .reduce((s, t) => s + t.total, 0);
+      const cardSales = todayTxns
+        .filter((t) => t.paymentMode === "card")
+        .reduce((s, t) => s + t.total, 0);
+      const totalItems = todayTxns.reduce(
+        (s, t) => s + t.items.reduce((is, i) => is + i.quantity, 0),
+        0
+      );
+      const totalExpenses = todayExpenses.reduce((s, e) => s + e.amount, 0);
+      const netProfit = totalSales - totalExpenses;
 
-    return {
-      id: generateId(),
-      date: today,
-      archivedAt: Date.now(),
-      openingCash,
-      summary: {
-        totalSales,
-        cashSales,
-        upiSales,
-        cardSales,
-        totalItems,
-      },
-      totalExpenses,
-      netProfit,
-      transactionCount: todayTxns.length,
-      transactions: todayTxns,
-      expenses: todayExpenses,
-      syncStatus: "pending",
-    };
-  }, [getOpeningCash]);
+      return {
+        id: generateId(),
+        date: today,
+        archivedAt: Date.now(),
+        openingCash,
+        summary: {
+          totalSales,
+          cashSales,
+          upiSales,
+          cardSales,
+          totalItems,
+        },
+        totalExpenses,
+        netProfit,
+        transactionCount: todayTxns.length,
+        transactions: todayTxns,
+        expenses: todayExpenses,
+      };
+    },
+    [getOpeningCash]
+  );
 
-  const closeDay = useCallback((): DailyReport => {
-    const report = generateReport();
-    // Archive the report
-    const existing = getItem<DailyReport[]>(KEYS.ARCHIVED_REPORTS) ?? [];
-    setItem(KEYS.ARCHIVED_REPORTS, [...existing, report]);
+  const closeDay = useCallback(
+    async (todayTxns: Transaction[], todayExpenses: Expense[]): Promise<DailyReport> => {
+      const report = await generateReport(todayTxns, todayExpenses);
 
-    // We no longer remove today's transactions from live store
-    // This allows the History page to view transactions from any day
-    
-    // Clear opening cash
-    removeItem(KEYS.OPENING_CASH);
-    
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new Event("syncRequested"));
+      // Save report to DB
+      await fetch("/api/reports", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(report),
+      });
+
+      // Clear opening cash
+      removeItem(KEYS.OPENING_CASH);
+
+      return report;
+    },
+    [generateReport]
+  );
+
+  const getArchivedReports = useCallback(async (): Promise<DailyReport[]> => {
+    try {
+      const res = await fetch("/api/reports");
+      if (res.ok) {
+        const data = await res.json();
+        return Array.isArray(data) ? data : [];
+      }
+    } catch (err) {
+      console.error("Failed to fetch reports:", err);
     }
-    
-    return report;
-  }, [generateReport]);
-
-  const getArchivedReports = useCallback((): DailyReport[] => {
-    return getItem<DailyReport[]>(KEYS.ARCHIVED_REPORTS) ?? [];
+    return [];
   }, []);
 
   return {

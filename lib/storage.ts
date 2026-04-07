@@ -27,12 +27,12 @@ export function removeItem(key: string): void {
 
 // Storage keys
 export const KEYS = {
-  PRODUCTS: "tst_products",
-  CATEGORIES: "tst_categories",
-  TRANSACTIONS: "tst_transactions",
-  SEEDED: "tst_seeded",
-  EXPENSES: "tst_expenses",
-  ARCHIVED_REPORTS: "tst_archived_reports",
+  // Cache keys (DB is source of truth, localStorage is fast cache)
+  CACHE_PRODUCTS: "tst_cache_products",
+  CACHE_CATEGORIES: "tst_cache_categories",
+  CACHE_TRANSACTIONS: "tst_cache_transactions",
+  CACHE_EXPENSES: "tst_cache_expenses",
+  // Device-local settings
   OPENING_CASH: "tst_opening_cash", // { date: string, amount: number }
   DARK_MODE: "tst_dark_mode", // boolean
   ADMIN_PIN: "tst_admin_pin", // string (default "1234")

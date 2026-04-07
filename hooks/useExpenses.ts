@@ -5,80 +5,102 @@ import { Expense, ExpenseCategory } from "@/types";
 import { getItem, setItem, KEYS } from "@/lib/storage";
 import { getTodayKey, generateId } from "@/lib/utils";
 
+// In-memory flag so we only fetch expenses once per session
+let sessionExpensesFetched = false;
+
 export function useExpenses() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
 
-  const load = useCallback((): Expense[] => {
-    return getItem<Expense[]>(KEYS.EXPENSES) ?? [];
-  }, []);
-
+  // Load cached, then refresh from DB
   useEffect(() => {
-    setExpenses(load());
-  }, [load]);
+    let cancelled = false;
 
-  const persist = useCallback((updated: Expense[]) => {
-    setItem(KEYS.EXPENSES, updated);
-    setExpenses(updated);
+    // 1. Instant load from cache
+    const cached = getItem<Expense[]>(KEYS.CACHE_EXPENSES);
+    if (cached) setExpenses(cached);
+
+    // 2. Skip DB refresh if we already fetched this session
+    if (sessionExpensesFetched) return;
+
+    // 3. Background refresh from DB
+    fetch("/api/expenses")
+      .then((res) => res.json())
+      .then((data) => {
+        if (!cancelled && Array.isArray(data)) {
+          setExpenses(data);
+          setItem(KEYS.CACHE_EXPENSES, data);
+          sessionExpensesFetched = true;
+        }
+      })
+      .catch((err) => console.error("Failed to load expenses:", err));
+
+    return () => { cancelled = true; };
   }, []);
 
   const addExpense = useCallback(
-    (data: Omit<Expense, "id" | "createdAt" | "syncStatus">) => {
-      const all = load();
+    (data: Omit<Expense, "id" | "createdAt">) => {
       const newExpense: Expense = {
         ...data,
         id: generateId(),
         createdAt: Date.now(),
-        syncStatus: "pending",
       };
-      persist([...all, newExpense]);
-      
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new Event("syncRequested"));
-      }
+
+      setExpenses((prev) => {
+        const updated = [...prev, newExpense];
+        setItem(KEYS.CACHE_EXPENSES, updated);
+        return updated;
+      });
+
+      fetch("/api/expenses", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newExpense),
+      }).catch((err) => console.error("Failed to save expense:", err));
     },
-    [load, persist]
+    []
   );
 
   const updateExpense = useCallback(
     (id: string, data: Partial<Omit<Expense, "id" | "createdAt">>) => {
-      const all = load();
-      const updated = all.map((e) => (e.id === id ? { ...e, ...data } : e));
-      persist(updated);
+      setExpenses((prev) => {
+        const updated = prev.map((e) => (e.id === id ? { ...e, ...data } : e));
+        setItem(KEYS.CACHE_EXPENSES, updated);
+        return updated;
+      });
     },
-    [load, persist]
+    []
   );
 
   const deleteExpense = useCallback(
     (id: string) => {
-      const all = load();
-      const updated = all.map((e) =>
-        e.id === id ? { ...e, deleted: true, syncStatus: "pending" as const } : e
+      setExpenses((prev) => {
+        const updated = prev.filter((e) => e.id !== id);
+        setItem(KEYS.CACHE_EXPENSES, updated);
+        return updated;
+      });
+
+      fetch(`/api/expenses?id=${id}`, { method: "DELETE" }).catch((err) =>
+        console.error("Failed to delete expense:", err)
       );
-      persist(updated);
-      
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new Event("syncRequested"));
-      }
     },
-    [load, persist]
+    []
   );
 
   const getTodayExpenses = useCallback((): Expense[] => {
     const today = getTodayKey();
-    return (getItem<Expense[]>(KEYS.EXPENSES) ?? []).filter(
-      (e) => e.date === today && !e.deleted
-    );
-  }, []);
+    return expenses.filter((e) => e.date === today);
+  }, [expenses]);
 
   const getTotalToday = useCallback((): number => {
     return getTodayExpenses().reduce((sum, e) => sum + e.amount, 0);
   }, [getTodayExpenses]);
 
-  const getExpensesByDate = useCallback((date: string): Expense[] => {
-    return (getItem<Expense[]>(KEYS.EXPENSES) ?? []).filter(
-      (e) => e.date === date && !e.deleted
-    );
-  }, []);
+  const getExpensesByDate = useCallback(
+    (date: string): Expense[] => {
+      return expenses.filter((e) => e.date === date);
+    },
+    [expenses]
+  );
 
   return {
     expenses,
