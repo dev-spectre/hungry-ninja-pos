@@ -5,6 +5,7 @@ export async function GET() {
   try {
     const products = await prisma.product.findMany({
       orderBy: { orderFrequency: "desc" },
+      include: { ingredients: true },
     });
     return NextResponse.json(products);
   } catch (error) {
@@ -45,7 +46,7 @@ export async function POST(request: Request) {
 export async function PUT(request: Request) {
   try {
     const body = await request.json();
-    const { id, ...data } = body;
+    const { id, ingredients, ...data } = body;
 
     const product = await prisma.product.update({
       where: { id },
@@ -70,10 +71,16 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: "Missing id" }, { status: 400 });
     }
 
-    await prisma.$transaction([
-      prisma.billItemRecord.deleteMany({ where: { productId: id } }),
-      prisma.product.delete({ where: { id } }),
-    ]);
+    try {
+      await prisma.billItemRecord.deleteMany({ where: { productId: id } });
+      await prisma.productIngredient.deleteMany({ where: { productId: id } });
+      await prisma.product.delete({ where: { id } });
+    } catch (e: any) {
+      if (e.code === "P2025") {
+        return NextResponse.json({ success: true, message: "Already deleted" });
+      }
+      throw e;
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

@@ -25,6 +25,28 @@ model Product {
   categoryId     String
   category       Category         @relation(fields: [categoryId], references: [id])
   billItems      BillItemRecord[]
+  ingredients    ProductIngredient[]
+}
+
+model InventoryItem {
+  id                String              @id @default(uuid())
+  name              String
+  unit              String              // "pcs", "kg", "litre", "gm", "ml"
+  currentStock      Float               @default(0)
+  lowStockThreshold Float               @default(5)
+  createdAt         DateTime            @default(now())
+  ingredients       ProductIngredient[]
+}
+
+model ProductIngredient {
+  id              String        @id @default(uuid())
+  productId       String
+  inventoryItemId String
+  quantityNeeded  Float
+  product         Product       @relation(fields: [productId], references: [id])
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id])
+
+  @@unique([productId, inventoryItemId])
 }
 
 model Transaction {

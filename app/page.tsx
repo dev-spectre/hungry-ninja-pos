@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect } from "react";
 import { useProducts } from "@/hooks/useProducts";
 import { useBill } from "@/hooks/useBill";
 import { useTransactions } from "@/hooks/useTransactions";
+import { useInventory } from "@/hooks/useInventory";
 import { PaymentMode, Product } from "@/types";
 import CategoryTabs from "@/components/billing/CategoryTabs";
 import SearchBar from "@/components/billing/SearchBar";
@@ -18,6 +19,7 @@ export default function BillingPage() {
   const { products, categories, initialized, getProductsByCategory, incrementFrequency } = useProducts();
   const { items, grandTotal, addItem, updateQuantity, removeItem, clearBill, toBillRecords, isEmpty } = useBill();
   const { saveTransaction } = useTransactions();
+  const { deductStock } = useInventory();
 
   const [activeCategoryId, setActiveCategoryId] = useState<string>("__all__");
   const [toast, setToast] = useState<string | null>(null);
@@ -49,12 +51,16 @@ export default function BillingPage() {
       saveTransaction(records, grandTotal, mode);
       const ids = items.map((i) => i.product.id);
       incrementFrequency(ids);
+      
+      // Deduct inventory stock
+      deductStock(items.map((i) => ({ product: i.product, quantity: i.quantity })));
+      
       clearBill();
       setBillOpen(false);
       setShowUpiQr(false);
       showToast(`₹${grandTotal.toFixed(2)} paid via ${mode.toUpperCase()} ✓`);
     },
-    [toBillRecords, saveTransaction, grandTotal, items, incrementFrequency, clearBill, showToast],
+    [toBillRecords, saveTransaction, grandTotal, items, incrementFrequency, deductStock, clearBill, showToast],
   );
 
   const handlePay = useCallback(

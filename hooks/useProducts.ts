@@ -55,12 +55,12 @@ export function useProducts() {
   }, []);
 
   const addProduct = useCallback(
-    (data: Omit<Product, "id" | "orderFrequency">) => {
+    (data: Omit<Product, "id" | "orderFrequency"> & Partial<Product>) => {
       const newProduct: Product = {
-        ...data,
         id: generateId(),
         orderFrequency: 0,
-      };
+        ...data,
+      } as Product;
 
       setProducts((prev) => {
         const updated = [...prev, newProduct];
@@ -68,43 +68,101 @@ export function useProducts() {
         return updated;
       });
 
-      fetch("/api/products", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newProduct),
-      }).catch((err) => console.error("Failed to save product:", err));
+      (async () => {
+         try {
+           const res = await fetch("/api/products", {
+             method: "POST",
+             headers: { "Content-Type": "application/json" },
+             body: JSON.stringify(newProduct),
+           });
+           if (!res.ok) throw new Error("Server rejected product");
+           
+           if (newProduct.ingredients && newProduct.ingredients.length > 0) {
+             const resIng = await fetch("/api/products/ingredients", {
+               method: "POST",
+               headers: { "Content-Type": "application/json" },
+               body: JSON.stringify({ productId: newProduct.id, ingredients: newProduct.ingredients })
+             });
+             if (!resIng.ok) throw new Error("Ingredients rejection");
+           }
+         } catch (err) {
+           console.error("Failed to add product:", err);
+           alert("Couldn't add product to the database. Please try again later.");
+           setProducts((prev) => {
+             const reverted = prev.filter(p => p.id !== newProduct.id);
+             setItem(KEYS.CACHE_PRODUCTS, reverted);
+             return reverted;
+           });
+         }
+      })();
     },
     []
   );
 
   const updateProduct = useCallback(
-    (id: string, data: Partial<Omit<Product, "id">>) => {
+    (id: string, data: Partial<Omit<Product, "id">> & { ingredients?: any[] }) => {
+      let originalProduct: Product | undefined;
       setProducts((prev) => {
+        originalProduct = prev.find(p => p.id === id);
         const updated = prev.map((p) => (p.id === id ? { ...p, ...data } : p));
         setItem(KEYS.CACHE_PRODUCTS, updated);
         return updated;
       });
 
-      fetch("/api/products", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, ...data }),
-      }).catch((err) => console.error("Failed to update product:", err));
+      (async () => {
+         try {
+           const res = await fetch("/api/products", {
+             method: "PUT",
+             headers: { "Content-Type": "application/json" },
+             body: JSON.stringify({ id, ...data }),
+           });
+           if (!res.ok) throw new Error("Server rejected update");
+
+           if (data.ingredients) {
+             const resIng = await fetch("/api/products/ingredients", {
+               method: "POST",
+               headers: { "Content-Type": "application/json" },
+               body: JSON.stringify({ productId: id, ingredients: data.ingredients })
+             });
+             if (!resIng.ok) throw new Error("Ingredients update rejection");
+           }
+         } catch (err) {
+           console.error("Failed to update product:", err);
+           alert("Couldn't update the product. Reverting changes...");
+           setProducts((prev) => {
+             const reverted = prev.map(p => p.id === id ? { ...p, ...(originalProduct || {}) } : p);
+             setItem(KEYS.CACHE_PRODUCTS, reverted);
+             return reverted;
+           });
+         }
+      })();
     },
     []
   );
 
   const deleteProduct = useCallback(
     (id: string) => {
+      let deletedItem: Product | undefined;
       setProducts((prev) => {
+        deletedItem = prev.find(p => p.id === id);
         const updated = prev.filter((p) => p.id !== id);
         setItem(KEYS.CACHE_PRODUCTS, updated);
         return updated;
       });
 
-      fetch(`/api/products?id=${id}`, { method: "DELETE" }).catch((err) =>
-        console.error("Failed to delete product:", err)
-      );
+      fetch(`/api/products?id=${id}`, { method: "DELETE" }).then(res => {
+         if (!res.ok) throw new Error("Delete failed");
+      }).catch((err) => {
+        console.error("Failed to delete product:", err);
+        alert("Couldn't delete product. Reverting...");
+        if (deletedItem) {
+          setProducts((prev) => {
+            const reverted = [...prev, deletedItem!];
+            setItem(KEYS.CACHE_PRODUCTS, reverted);
+            return reverted;
+          });
+        }
+      });
     },
     []
   );

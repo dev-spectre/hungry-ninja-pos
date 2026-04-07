@@ -34,6 +34,7 @@ export interface Product {
   price: number;
   active: boolean;
   orderFrequency: number;
+  ingredients?: ProductIngredient[];
 }
 
 export interface BillItem {
@@ -56,6 +57,33 @@ export interface BillItemRecord {
   price: number;
   quantity: number;
   subtotal: number;
+}
+
+export const INVENTORY_UNITS = [
+  { value: "pcs", label: "Pieces (pcs)" },
+  { value: "kg", label: "Kilograms (kg)" },
+  { value: "litre", label: "Litres (L)" },
+  { value: "gm", label: "Grams (gm)" },
+  { value: "ml", label: "Millilitres (ml)" },
+] as const;
+
+export type InventoryUnit = typeof INVENTORY_UNITS[number]["value"];
+
+export interface InventoryItem {
+  id: string;
+  name: string;
+  unit: string;
+  currentStock: number;
+  lowStockThreshold: number;
+  createdAt: number;
+}
+
+export interface ProductIngredient {
+  id: string;
+  productId: string;
+  inventoryItemId: string;
+  quantityNeeded: number;
+  inventoryItem?: InventoryItem; // Optional populated field
 }
 
 export interface DailySummary {

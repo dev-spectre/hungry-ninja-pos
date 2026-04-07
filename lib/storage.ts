@@ -32,6 +32,7 @@ export const KEYS = {
   CACHE_CATEGORIES: "tst_cache_categories",
   CACHE_TRANSACTIONS: "tst_cache_transactions",
   CACHE_EXPENSES: "tst_cache_expenses",
+  CACHE_INVENTORY: "tst_cache_inventory",
   // Device-local settings
   OPENING_CASH: "tst_opening_cash", // { date: string, amount: number }
   DARK_MODE: "tst_dark_mode", // boolean

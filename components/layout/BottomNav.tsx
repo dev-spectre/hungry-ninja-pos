@@ -8,12 +8,14 @@ import {
   History,
   Settings,
   Receipt,
+  Package,
 } from "lucide-react";
 
 const navItems = [
   { href: "/", label: "Billing", icon: ShoppingCart },
   { href: "/history", label: "History", icon: History },
   { href: "/expenses", label: "Expenses", icon: Receipt },
+  { href: "/inventory", label: "Inventory", icon: Package },
   { href: "/admin", label: "Admin", icon: Settings },
 ];
 
