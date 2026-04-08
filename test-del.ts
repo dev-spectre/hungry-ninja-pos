@@ -8,7 +8,7 @@ async function run() {
       prisma.product.delete({ where: { id: "any" } }),
     ]);
     console.log("Deleted");
-  } catch (e) {
+  } catch (e: any) {
     console.error("DELETE Error:", e.name, e.code, e.message);
   }
 }
