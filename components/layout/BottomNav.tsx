@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import {
   LayoutDashboard,
   ShoppingCart,
@@ -19,8 +20,38 @@ const navItems = [
   { href: "/admin", label: "Admin", icon: Settings },
 ];
 
+const superAdminNavItems = [
+  { href: "/super-admin", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/super-admin/inventory", label: "Global Inventory", icon: Package }
+];
+
 export default function BottomNav() {
   const pathname = usePathname();
+  const [role, setRole] = useState<string | null>(null);
+  const [activeBranch, setActiveBranch] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setRole(localStorage.getItem('user_role'));
+    setActiveBranch(localStorage.getItem('active_branch_id'));
+    setMounted(true);
+  }, [pathname]);
+
+  if (!mounted || pathname === '/login') return null;
+
+  const filteredNavItems = (role === "SUPER_ADMIN" && !activeBranch) 
+    ? superAdminNavItems 
+    : navItems.filter((item) => {
+        if (role === "SUPER_ADMIN" && activeBranch) return true;
+        if (role === "SHOP_MANAGER") return true; 
+        if (role === "BILLING") return ["/", "/history"].includes(item.href);
+        if (role === "INVENTORY") return ["/inventory", "/history"].includes(item.href);
+        
+        // If KITCHEN or other, fallback to billing/history. 
+        // If not hydrated yet, return empty to prevent flashing unwanted tabs.
+        if (!role) return false;
+        return ["/", "/history"].includes(item.href);
+      });
 
   return (
     <nav
@@ -32,7 +63,7 @@ export default function BottomNav() {
         paddingBottom: "env(safe-area-inset-bottom)",
       }}
     >
-      {navItems.map(({ href, label, icon: Icon }) => {
+      {filteredNavItems.map(({ href, label, icon: Icon }) => {
         const active = pathname === href;
         return (
           <Link

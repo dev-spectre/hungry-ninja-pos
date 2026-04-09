@@ -1,9 +1,14 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getBranchId } from "@/lib/auth";
 
 export async function GET() {
   try {
+    const branchId = await getBranchId();
+    if (!branchId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
     const reports = await prisma.dailyReport.findMany({
+      where: { branchId },
       orderBy: { archivedAt: "desc" },
       take: 100,
     });
@@ -39,9 +44,11 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { id, date, archivedAt, openingCash, summary, totalExpenses, netProfit, transactionCount } = body;
+    const branchId = await getBranchId();
+    if (!branchId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const report = await prisma.dailyReport.upsert({
-      where: { id },
+      where: { date_branchId: { date, branchId } },
       create: {
         id,
         date,
@@ -55,6 +62,7 @@ export async function POST(request: Request) {
         totalExpenses,
         netProfit,
         transactionCount,
+        branchId,
       },
       update: {
         date,

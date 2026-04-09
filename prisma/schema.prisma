@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -9,21 +6,54 @@ datasource db {
   provider = "postgresql"
 }
 
+model Branch {
+  id           String          @id @default(uuid())
+  name         String
+  address      String?
+  settings     Json?
+  createdAt    DateTime        @default(now())
+  users        User[]
+  categories   Category[]
+  products     Product[]
+  inventory    InventoryItem[]
+  transactions Transaction[]
+  expenses     Expense[]
+  dailyReports DailyReport[]
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  username     String   @unique
+  passwordHash String
+  role         String   // "SUPER_ADMIN", "SHOP_MANAGER", "BILLING", "KITCHEN", "INVENTORY", "BRANCH_ADMIN"
+  branchId     String?
+  branch       Branch?  @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
 model Category {
   id        String    @id @default(uuid())
   name      String
   isDefault Boolean   @default(false)
+  branchId  String
+  branch    Branch    @relation(fields: [branchId], references: [id], onDelete: Cascade)
   products  Product[]
+
+  @@unique([name, branchId])
 }
 
 model Product {
-  id             String           @id @default(uuid())
+  id             String              @id @default(uuid())
   name           String
   price          Float
-  active         Boolean          @default(true)
-  orderFrequency Int              @default(0)
+  active         Boolean             @default(true)
+  orderFrequency Int                 @default(0)
   categoryId     String
-  category       Category         @relation(fields: [categoryId], references: [id])
+  category       Category            @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  branchId       String
+  branch         Branch              @relation(fields: [branchId], references: [id], onDelete: Cascade)
   billItems      BillItemRecord[]
   ingredients    ProductIngredient[]
 }
@@ -35,6 +65,8 @@ model InventoryItem {
   currentStock      Float               @default(0)
   lowStockThreshold Float               @default(5)
   createdAt         DateTime            @default(now())
+  branchId          String
+  branch            Branch              @relation(fields: [branchId], references: [id], onDelete: Cascade)
   ingredients       ProductIngredient[]
 }
 
@@ -43,8 +75,8 @@ model ProductIngredient {
   productId       String
   inventoryItemId String
   quantityNeeded  Float
-  product         Product       @relation(fields: [productId], references: [id])
-  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id])
+  product         Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
 
   @@unique([productId, inventoryItemId])
 }
@@ -55,6 +87,8 @@ model Transaction {
   timestamp   Float            // Unix ms
   total       Float
   paymentMode String           // "cash" | "upi" | "card"
+  branchId    String
+  branch      Branch           @relation(fields: [branchId], references: [id], onDelete: Cascade)
   items       BillItemRecord[]
   createdAt   DateTime         @default(now())
 }
@@ -67,8 +101,8 @@ model BillItemRecord {
   quantity      Int
   subtotal      Float
   transactionId String
-  transaction   Transaction @relation(fields: [transactionId], references: [id])
-  product       Product     @relation(fields: [productId], references: [id])
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  product       Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
 }
 
 model Expense {
@@ -79,11 +113,13 @@ model Expense {
   date      String   // YYYY-MM-DD
   notes     String?
   createdAt Float    // Unix ms
+  branchId  String
+  branch    Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
 }
 
 model DailyReport {
   id               String   @id @default(uuid())
-  date             String   @unique // YYYY-MM-DD
+  date             String   // YYYY-MM-DD
   archivedAt       Float    // Unix ms
   openingCash      Float
   totalSales       Float
@@ -94,4 +130,8 @@ model DailyReport {
   totalExpenses    Float
   netProfit        Float
   transactionCount Int
+  branchId         String
+  branch           Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@unique([date, branchId])
 }

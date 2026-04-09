@@ -1,14 +1,16 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { Sun, Moon, LayoutDashboardIcon } from "lucide-react";
+import { Sun, Moon, LayoutDashboardIcon, LogOut } from "lucide-react";
 import { useTheme } from "@/components/layout/ThemeProvider";
 import Link from "next/link";
+import { useState, useEffect } from "react";
 
 const titles: Record<string, string> = {
   "/dashboard": "Dashboard",
   "/": "New Bill",
   "/history": "Sales History",
+  "/super-admin": "System Administration",
   "/admin": "Product Admin",
   "/expenses": "Expenses",
   "/inventory": "Inventory",
@@ -18,8 +20,25 @@ const titles: Record<string, string> = {
 
 export default function TopBar() {
   const pathname = usePathname();
-  const title = titles[pathname] ?? "Today Sales Tracker";
+  const title = titles[pathname] ?? "PoS";
   const { isDark, toggle } = useTheme();
+  
+  const [role, setRole] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setRole(localStorage.getItem('user_role'));
+    setMounted(true);
+  }, [pathname]);
+
+  const handleLogout = async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    localStorage.removeItem("user_role");
+    ['tst_cache_products', 'tst_cache_categories', 'tst_cache_transactions', 'tst_cache_expenses', 'tst_cache_inventory'].forEach(k => localStorage.removeItem(k));
+    window.location.href = "/login";
+  };
+
+  if (!mounted || pathname === '/login') return null;
 
   return (
     <header
@@ -38,9 +57,26 @@ export default function TopBar() {
         </span>
       </div>
       <div className="ml-auto flex items-center gap-4">
-        <Link href="/dashboard" className="text-sm flex gap-1 flex-col items-center justify-between font-medium text-(--text-muted) hover:text-(--accent)">
-          <LayoutDashboardIcon size={16} />
-        </Link>
+        {role === "SUPER_ADMIN" && (
+           <Link href="/super-admin" className="text-sm flex gap-1 flex-col items-center justify-between font-medium text-(--text-muted) hover:text-(--accent)">
+             <LayoutDashboardIcon size={16} />
+           </Link>
+        )}
+        {role === "SHOP_MANAGER" && (
+          <Link href="/dashboard" className="text-sm flex gap-1 flex-col items-center justify-between font-medium text-(--text-muted) hover:text-(--accent)">
+            <LayoutDashboardIcon size={16} />
+          </Link>
+        )}
+        <button
+          onClick={handleLogout}
+          aria-label="Logout"
+          className="w-8 h-8 rounded-xl flex items-center justify-center transition-all active:scale-90"
+          style={{
+            background: "var(--red-soft)",
+            color: "var(--red)",
+          }}>
+          <LogOut size={16} />
+        </button>
         {/* Dark Mode Toggle */}
         <button
           onClick={toggle}

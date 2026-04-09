@@ -1,9 +1,14 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getBranchId } from "@/lib/auth";
 
 export async function GET() {
   try {
+    const branchId = await getBranchId();
+    if (!branchId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
     const categories = await prisma.category.findMany({
+      where: { branchId },
       orderBy: { name: "asc" },
     });
     return NextResponse.json(categories);
@@ -20,9 +25,11 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { id, name, isDefault } = body;
+    const branchId = await getBranchId();
+    if (!branchId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const category = await prisma.category.create({
-      data: { id, name, isDefault: isDefault ?? false },
+      data: { id, name, isDefault: isDefault ?? false, branchId },
     });
 
     return NextResponse.json(category, { status: 201 });
@@ -39,9 +46,11 @@ export async function PUT(request: Request) {
   try {
     const body = await request.json();
     const { id, name } = body;
+    const branchId = await getBranchId();
+    if (!branchId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const category = await prisma.category.update({
-      where: { id },
+      where: { id, branchId },
       data: { name },
     });
 
@@ -62,10 +71,12 @@ export async function DELETE(request: Request) {
     if (!id) {
       return NextResponse.json({ error: "Missing id" }, { status: 400 });
     }
+    const branchId = await getBranchId();
+    if (!branchId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     // Delete products in this category first, then the category
     const productsInCategory = await prisma.product.findMany({
-      where: { categoryId: id },
+      where: { categoryId: id, branchId },
       select: { id: true },
     });
     const productIds = productsInCategory.map((p) => p.id);
@@ -81,7 +92,7 @@ export async function DELETE(request: Request) {
             }),
           ]
         : []),
-      prisma.category.delete({ where: { id } }),
+      prisma.category.delete({ where: { id, branchId } }),
     ]);
 
     return NextResponse.json({ success: true });

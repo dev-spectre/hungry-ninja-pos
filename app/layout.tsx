@@ -5,7 +5,7 @@ import TopBar from "@/components/layout/TopBar";
 import ThemeProvider from "@/components/layout/ThemeProvider";
 
 export const metadata: Metadata = {
-  title: "Today Sales Tracker",
+  title: "PoS",
   description: "Point of Sale system for bakery and snack shops",
   manifest: "/manifest.json",
 };

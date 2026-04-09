@@ -1,13 +1,19 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getBranchId } from "@/lib/auth";
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const date = searchParams.get("date");
+    const branchId = await getBranchId();
+    if (!branchId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const expenses = await prisma.expense.findMany({
-      where: date ? { date } : undefined,
+      where: {
+        branchId,
+        ...(date ? { date } : {}),
+      },
       orderBy: { createdAt: "desc" },
       take: 200,
     });
@@ -26,9 +32,11 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { id, title, category, amount, date, notes, createdAt } = body;
+    const branchId = await getBranchId();
+    if (!branchId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const expense = await prisma.expense.create({
-      data: { id, title, category, amount, date, notes: notes || "", createdAt },
+      data: { id, title, category, amount, date, notes: notes || "", createdAt, branchId },
     });
 
     return NextResponse.json(expense, { status: 201 });
@@ -48,8 +56,10 @@ export async function DELETE(request: Request) {
     if (!id) {
       return NextResponse.json({ error: "Missing id" }, { status: 400 });
     }
+    const branchId = await getBranchId();
+    if (!branchId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    await prisma.expense.delete({ where: { id } });
+    await prisma.expense.delete({ where: { id, branchId } });
 
     return NextResponse.json({ success: true });
   } catch (error) {

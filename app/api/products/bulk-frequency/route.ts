@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getBranchId } from "@/lib/auth";
 
 export async function PUT(request: Request) {
   try {
@@ -9,12 +10,14 @@ export async function PUT(request: Request) {
     if (!Array.isArray(productIds) || productIds.length === 0) {
       return NextResponse.json({ error: "Invalid or empty productIds array" }, { status: 400 });
     }
+    const branchId = await getBranchId();
+    if (!branchId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     // Prisma doesn't have an atomic "increment multiple different records"
     // that returns all of them easily with one query, but updateMany can handle this
     // if all are incremented by 1.
     const result = await prisma.product.updateMany({
-      where: { id: { in: productIds } },
+      where: { id: { in: productIds }, branchId },
       data: {
         orderFrequency: { increment: 1 },
       },

@@ -169,29 +169,38 @@ export function useProducts() {
 
   const toggleActive = useCallback(
     (id: string) => {
+      let newActive: boolean | null = null;
+
       setProducts((prev) => {
         const product = prev.find((p) => p.id === id);
         if (!product) return prev;
-        const newActive = !product.active;
-
-        fetch("/api/products", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id, active: newActive }),
-        }).catch((err) => console.error("Failed to toggle product:", err));
+        newActive = !product.active;
 
         const updated = prev.map((p) =>
-          p.id === id ? { ...p, active: newActive } : p
+          p.id === id ? { ...p, active: newActive! } : p
         );
         setItem(KEYS.CACHE_PRODUCTS, updated);
         return updated;
       });
+
+      // Synchronous execution outside React Strict Mode updater
+      setTimeout(() => {
+         if (newActive !== null) {
+            fetch("/api/products", {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ id, active: newActive }),
+            }).catch((err) => console.error("Failed to toggle product:", err));
+         }
+      }, 0);
     },
     []
   );
 
   const incrementFrequency = useCallback(
     (productIds: string[]) => {
+      let bulkFrequencies: string[] = [];
+
       setProducts((prev) => {
         const updates: { id: string; orderFrequency: number }[] = [];
         const updated = prev.map((p) => {
@@ -206,38 +215,50 @@ export function useProducts() {
         setItem(KEYS.CACHE_PRODUCTS, updated);
 
         if (updates.length > 0) {
-          const productIds = updates.map((u) => u.id);
-          fetch("/api/products/bulk-frequency", {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ productIds }),
-          }).catch((err) => console.error("Failed to bulk update frequency:", err));
+          bulkFrequencies = updates.map((u) => u.id);
         }
 
         return updated;
       });
+
+      // Execute safely off-thread to dodge React internal replay loops
+      setTimeout(() => {
+         if (bulkFrequencies.length > 0) {
+           fetch("/api/products/bulk-frequency", {
+             method: "PUT",
+             headers: { "Content-Type": "application/json" },
+             body: JSON.stringify({ productIds: bulkFrequencies }),
+           }).catch((err) => console.error("Failed to bulk update frequency:", err));
+         }
+      }, 0);
     },
     []
   );
 
   const addCategory = useCallback(
     (name: string) => {
-      const id = name.toLowerCase().replace(/\s+/g, "-");
+      const id = generateId();
+      let didMutate = false;
 
       setCategories((prev) => {
-        if (prev.some((c) => c.id === id)) return prev;
+        if (prev.some((c) => c.name.toLowerCase() === name.toLowerCase())) return prev;
         const newCat: Category = { id, name };
         const updated = [...prev, newCat];
         setItem(KEYS.CACHE_CATEGORIES, updated);
-
-        fetch("/api/categories", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(newCat),
-        }).catch((err) => console.error("Failed to save category:", err));
-
+        didMutate = true;
         return updated;
       });
+
+      // Isolate fetch to avoid being re-fired during React layout strict-mode replays
+      setTimeout(() => {
+        if (didMutate) {
+           fetch("/api/categories", {
+             method: "POST",
+             headers: { "Content-Type": "application/json" },
+             body: JSON.stringify({ id, name }),
+           }).catch((err) => console.error("Failed to save category:", err));
+        }
+      }, 0);
     },
     []
   );

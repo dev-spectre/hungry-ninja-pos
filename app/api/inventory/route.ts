@@ -1,9 +1,30 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getBranchId, getUserRole } from "@/lib/auth";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url);
+    const isGlobal = searchParams.get("global") === "true";
+    const role = await getUserRole();
+
+    if (isGlobal && role === "SUPER_ADMIN") {
+        const items = await prisma.inventoryItem.findMany({
+            include: { branch: true },
+            orderBy: { name: "asc" }
+        });
+        const formatted = items.map(item => ({
+           ...item,
+           createdAt: item.createdAt.getTime()
+        }));
+        return NextResponse.json(formatted);
+    }
+
+    const branchId = await getBranchId();
+    if (!branchId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
     const items = await prisma.inventoryItem.findMany({
+      where: { branchId },
       orderBy: { name: "asc" },
     });
     
@@ -27,6 +48,8 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { id, name, unit, currentStock, lowStockThreshold } = body;
+    const branchId = await getBranchId();
+    if (!branchId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const item = await prisma.inventoryItem.create({
       data: {
@@ -35,6 +58,7 @@ export async function POST(request: Request) {
         unit,
         currentStock: currentStock ?? 0,
         lowStockThreshold: lowStockThreshold ?? 5,
+        branchId,
       },
     });
 
@@ -55,6 +79,8 @@ export async function PUT(request: Request) {
   try {
     const body = await request.json();
     const { id, currentStock, lowStockThreshold, ...data } = body;
+    const branchId = await getBranchId();
+    if (!branchId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     
     // Filter out createdAt manually if it was passed from client to avoid type issues
     if ('createdAt' in data) {
@@ -62,7 +88,7 @@ export async function PUT(request: Request) {
     }
 
     const item = await prisma.inventoryItem.update({
-      where: { id },
+      where: { id, branchId },
       data: {
         ...data,
         // Include updates specifically if they exist in the request
@@ -91,10 +117,11 @@ export async function DELETE(request: Request) {
     if (!id) {
       return NextResponse.json({ error: "Missing id" }, { status: 400 });
     }
+    const branchId = await getBranchId();
+    if (!branchId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     await prisma.$transaction([
-      prisma.productIngredient.deleteMany({ where: { inventoryItemId: id } }),
-      prisma.inventoryItem.delete({ where: { id } }),
+      prisma.inventoryItem.delete({ where: { id, branchId } }),
     ]);
 
     return NextResponse.json({ success: true });

@@ -2,7 +2,7 @@ import type { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
   appId: "com.todaysalestracker.app",
-  appName: "Today Sales Tracker",
+  appName: "PoS",
   webDir: "out",
   server: {
     androidScheme: "https",

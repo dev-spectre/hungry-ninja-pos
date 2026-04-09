@@ -17,7 +17,8 @@ import {
   X,
   Database,
   FileBarChart,
-  Key,
+  Users,
+  LogOut,
 } from "lucide-react";
 import { getItem, setItem, KEYS } from "@/lib/storage";
 
@@ -66,6 +67,7 @@ function ProductForm({
 
   function handleSave() {
     if (!name.trim()) return setError("Name is required");
+    if (!categoryId.trim()) return setError("Please create and select a category first.");
     if (!price || isNaN(Number(price)) || Number(price) <= 0) return setError("Enter a valid price");
     
     // Validate ingredients (filter out incomplete ones, check numbers)
@@ -337,6 +339,129 @@ function CategorySection({
   );
 }
 
+function UserManagement() {
+  const [users, setUsers] = useState<any[]>([]);
+  const [showAdd, setShowAdd] = useState(false);
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  const fetchUsers = async () => {
+    const res = await fetch("/api/users");
+    if (res.ok) setUsers(await res.json());
+  };
+
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const formData = new FormData(e.target as HTMLFormElement);
+    const data = Object.fromEntries(formData.entries());
+
+    const res = await fetch("/api/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+    });
+    if (res.ok) {
+       setShowAdd(false);
+       fetchUsers();
+    } else {
+       alert((await res.json()).error);
+    }
+  };
+
+  const handleEditUser = async (e: React.FormEvent, id: string) => {
+    e.preventDefault();
+    const formData = new FormData(e.target as HTMLFormElement);
+    const data = Object.fromEntries(formData.entries());
+    (data as any).id = id;
+
+    const res = await fetch("/api/users", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+    });
+    
+    if (res.ok) {
+       setEditingUserId(null);
+       fetchUsers();
+    } else {
+       alert((await res.json()).error);
+    }
+  };
+
+  const handleDeleteUser = async (id: string, name: string) => {
+    if (!confirm(`Remove staff member ${name}?`)) return;
+    await fetch(`/api/users?id=${id}`, { method: "DELETE" });
+    fetchUsers();
+  };
+
+  return (
+    <div className="rounded-2xl overflow-hidden p-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+      <div className="flex justify-between items-center mb-4">
+        <span className="font-semibold text-sm" style={{ color: "var(--text-primary)" }}>Staff Management ({users.length})</span>
+        <button onClick={() => setShowAdd(!showAdd)} className="text-xs font-semibold px-3 py-1.5 rounded-lg" style={{ background: "var(--accent-soft)", color: "var(--accent)" }}>
+          {showAdd ? "Close" : "+ Add Staff"}
+        </button>
+      </div>
+
+      {showAdd && (
+        <form onSubmit={handleCreateUser} className="space-y-3 mb-4 p-3 bg-(--bg-elevated) rounded-xl border border-(--border)">
+          <input name="name" className="w-full bg-(--bg-card) p-2 text-sm rounded-lg border border-(--border)" placeholder="Display Name" required />
+          <input name="username" className="w-full bg-(--bg-card) p-2 text-sm rounded-lg border border-(--border)" placeholder="Username" required />
+          <input name="password" type="password" className="w-full bg-(--bg-card) p-2 text-sm rounded-lg border border-(--border)" placeholder="Password" required />
+          <select name="role" className="w-full bg-(--bg-card) p-2 text-sm rounded-lg border border-(--border)" required>
+            <option value="">Select Role</option>
+            <option value="BILLING">Billing / Cashier</option>
+            <option value="KITCHEN">Kitchen Staff</option>
+            <option value="INVENTORY">Inventory Staff</option>
+          </select>
+          <button type="submit" className="w-full p-2 bg-(--accent) text-white text-sm font-semibold rounded-lg active:scale-95 transition-all">Submit</button>
+        </form>
+      )}
+
+      <div className="space-y-2">
+        {users.map(u => (
+          editingUserId === u.id ? (
+             <form onSubmit={(e) => handleEditUser(e, u.id)} key={u.id} className="p-3 bg-(--bg-elevated) rounded-xl border border-(--border)">
+                <div className="space-y-2">
+                   <input name="name" defaultValue={u.name} className="w-full bg-(--bg-card) p-2 text-sm rounded-lg border border-(--border)" required />
+                   <input name="username" defaultValue={u.username} className="w-full bg-(--bg-card) p-2 text-sm rounded-lg border border-(--border)" required />
+                   <input name="password" placeholder="Leave blank to keep current" type="password" className="w-full bg-(--bg-card) p-2 text-sm rounded-lg border border-(--border)" />
+                   
+                   <select name="role" defaultValue={u.role} className="w-full bg-(--bg-card) p-2 text-sm rounded-lg border border-(--border)" required>
+                      <option value="BILLING">Billing / Cashier</option>
+                      <option value="KITCHEN">Kitchen Staff</option>
+                      <option value="INVENTORY">Inventory Staff</option>
+                   </select>
+
+                   <div className="flex gap-2 pt-1">
+                      <button type="submit" className="flex-1 py-1.5 bg-green-500 text-white rounded-lg text-sm flex items-center justify-center"><Check size={16}/></button>
+                      <button type="button" onClick={() => setEditingUserId(null)} className="flex-1 py-1.5 bg-red-500 text-white rounded-lg text-sm flex items-center justify-center"><X size={16}/></button>
+                   </div>
+                </div>
+             </form>
+          ) : (
+             <div key={u.id} className="p-3 bg-(--bg-elevated) rounded-xl flex items-center justify-between border border-(--border)">
+                <div>
+                   <p className="text-sm font-semibold">{u.name} <span className="text-xs text-(--text-muted) font-normal">@{u.username}</span></p>
+                   <p className="text-[10px] uppercase font-bold text-(--accent)">{u.role}</p>
+                </div>
+                {(u.role !== "SUPER_ADMIN" && u.role !== "SHOP_MANAGER") && (
+                   <div className="flex gap-1">
+                      <button onClick={() => setEditingUserId(u.id)} className="p-2 bg-(--bg-card) hover:text-blue-500 rounded-lg"><Pencil size={14}/></button>
+                      <button onClick={() => handleDeleteUser(u.id, u.name)} className="p-2 bg-red-500/10 text-red-500 rounded-lg"><Trash2 size={14}/></button>
+                   </div>
+                )}
+             </div>
+          )
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function AdminPage() {
   const {
     products,
@@ -367,16 +492,12 @@ export default function AdminPage() {
     return catMatch && activeMatch;
   });
 
-  function handleChangePin() {
-    const current = getItem<string>(KEYS.ADMIN_PIN) ?? "1234";
-    const entered = prompt(`Current PIN (default: 1234):`);
-    if (entered === null) return;
-    if (entered !== current) { alert("Wrong PIN!"); return; }
-    const newPin = prompt("Enter new PIN (digits only):");
-    if (!newPin || !/^\d+$/.test(newPin)) { alert("Invalid PIN."); return; }
-    setItem(KEYS.ADMIN_PIN, newPin);
-    alert("PIN changed successfully!");
-  }
+  const handleLogout = async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    localStorage.removeItem("user_role");
+    ['tst_cache_products', 'tst_cache_categories', 'tst_cache_transactions', 'tst_cache_expenses', 'tst_cache_inventory'].forEach(k => localStorage.removeItem(k));
+    window.location.href = "/login";
+  };
 
   return (
     <div className="p-4 space-y-4">
@@ -399,12 +520,12 @@ export default function AdminPage() {
           Close Day
         </Link>
         <button
-          onClick={handleChangePin}
+          onClick={handleLogout}
           className="flex flex-col items-center gap-1.5 p-3 rounded-2xl text-xs font-medium transition-all active:scale-95"
-          style={{ background: "var(--accent-soft)", color: "var(--accent)" }}
+          style={{ background: "var(--red-soft)", color: "var(--red)" }}
         >
-          <Key size={18} />
-          Change PIN
+          <LogOut size={18} />
+          Logout
         </button>
       </div>
 
@@ -442,6 +563,9 @@ export default function AdminPage() {
         onEdit={updateCategory}
         onDelete={deleteCategory}
       />
+
+      {/* User Management Section */}
+      <UserManagement />
 
       {/* Product Management Header */}
       <div className="flex items-center justify-between">
