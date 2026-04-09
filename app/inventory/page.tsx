@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useInventory } from "@/hooks/useInventory";
 import { INVENTORY_UNITS, InventoryItem } from "@/types";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Plus, Pencil, Trash2, AlertTriangle, Package, Check, X, Search } from "lucide-react";
 
 function InventoryForm({
@@ -126,6 +127,7 @@ export default function InventoryPage() {
     updateItem,
     deleteItem,
   } = useInventory();
+  const perms = usePermissions("inventory");
 
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -171,13 +173,15 @@ export default function InventoryPage() {
                {inventoryItems.length}
             </span>
           </h2>
-          <button
-            onClick={() => { setShowAddForm(!showAddForm); setEditingId(null); }}
-            className="flex items-center gap-1 px-3 py-2 rounded-xl text-sm font-semibold transition-all active:scale-95 shadow-sm"
-            style={{ background: "var(--accent)", color: "#fff" }}
-          >
-            <Plus size={14} /> Add Item
-          </button>
+          {perms.write && (
+            <button
+              onClick={() => { setShowAddForm(!showAddForm); setEditingId(null); }}
+              className="flex items-center gap-1 px-3 py-2 rounded-xl text-sm font-semibold transition-all active:scale-95 shadow-sm"
+              style={{ background: "var(--accent)", color: "#fff" }}
+            >
+              <Plus size={14} /> Add Item
+            </button>
+          )}
         </div>
 
         <div className="relative">
@@ -249,24 +253,28 @@ export default function InventoryPage() {
                 </div>
                 
                 <div className="flex items-center gap-1.5 shrink-0">
-                    <button
-                      onClick={() => { setEditingId(item.id); setShowAddForm(false); }}
-                      className="w-8 h-8 rounded-xl flex items-center justify-center transition-colors"
-                      style={{ background: "var(--accent-soft)", color: "var(--accent)" }}
-                    >
-                      <Pencil size={14} />
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (confirm(`Delete "${item.name}" from inventory? This removes it from all linked recipes.`)) {
-                           deleteItem(item.id);
-                        }
-                      }}
-                      className="w-8 h-8 rounded-xl flex items-center justify-center transition-colors"
-                      style={{ background: "var(--red-soft)", color: "var(--red)" }}
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    {perms.write && (
+                      <button
+                        onClick={() => { setEditingId(item.id); setShowAddForm(false); }}
+                        className="w-8 h-8 rounded-xl flex items-center justify-center transition-colors"
+                        style={{ background: "var(--accent-soft)", color: "var(--accent)" }}
+                      >
+                        <Pencil size={14} />
+                      </button>
+                    )}
+                    {perms.delete && (
+                      <button
+                        onClick={() => {
+                          if (confirm(`Delete "${item.name}" from inventory? This removes it from all linked recipes.`)) {
+                             deleteItem(item.id);
+                          }
+                        }}
+                        className="w-8 h-8 rounded-xl flex items-center justify-center transition-colors"
+                        style={{ background: "var(--red-soft)", color: "var(--red)" }}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
                 </div>
              </div>
            );

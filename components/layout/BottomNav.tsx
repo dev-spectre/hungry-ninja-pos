@@ -28,29 +28,42 @@ const superAdminNavItems = [
 export default function BottomNav() {
   const pathname = usePathname();
   const [role, setRole] = useState<string | null>(null);
+  const [permissions, setPermissions] = useState<any>({});
   const [activeBranch, setActiveBranch] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setRole(localStorage.getItem('user_role'));
+    try {
+        setPermissions(JSON.parse(localStorage.getItem('user_permissions') || "{}"));
+    } catch {
+        setPermissions({});
+    }
     setActiveBranch(localStorage.getItem('active_branch_id'));
     setMounted(true);
   }, [pathname]);
 
   if (!mounted || pathname === '/login') return null;
 
-  const filteredNavItems = (role === "SUPER_ADMIN" && !activeBranch) 
+  const filteredNavItems = (role?.includes("SUPER_ADMIN") && !activeBranch) 
     ? superAdminNavItems 
     : navItems.filter((item) => {
-        if (role === "SUPER_ADMIN" && activeBranch) return true;
-        if (role === "SHOP_MANAGER") return true; 
-        if (role === "BILLING") return ["/", "/history"].includes(item.href);
-        if (role === "INVENTORY") return ["/inventory", "/history"].includes(item.href);
-        
-        // If KITCHEN or other, fallback to billing/history. 
-        // If not hydrated yet, return empty to prevent flashing unwanted tabs.
-        if (!role) return false;
-        return ["/", "/history"].includes(item.href);
+        if (role?.includes("SUPER_ADMIN") && activeBranch) return true;
+        if (role?.includes("SHOP_MANAGER")) return true; 
+
+        if (Object.keys(permissions).length > 0) {
+            if (item.label === 'Billing') return permissions.billing?.read;
+            if (item.label === 'History') return permissions.history?.read;
+            if (item.label === 'Expenses') return permissions.expenses?.read;
+            if (item.label === 'Inventory') return permissions.inventory?.read;
+            if (item.label === 'Admin') return permissions.admin?.read;
+            return false;
+        }
+
+        if (role?.includes("BILLING") && !role.includes("INVENTORY")) return ["/", "/history"].includes(item.href);
+        if (role?.includes("INVENTORY") && !role.includes("BILLING")) return ["/inventory", "/history"].includes(item.href);
+        if (role?.includes("INVENTORY") && role.includes("BILLING")) return true;
+        return false;
       });
 
   return (

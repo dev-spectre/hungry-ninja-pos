@@ -12,6 +12,7 @@ import {
   Receipt,
   AlertCircle,
 } from "lucide-react";
+import { usePermissions } from "@/hooks/usePermissions";
 
 const categoryColors: Record<string, string> = {
   raw_materials: "var(--orange)",
@@ -26,6 +27,7 @@ const categoryColors: Record<string, string> = {
 
 export default function ExpensesPage() {
   const { expenses, addExpense, updateExpense, deleteExpense } = useExpenses();
+  const perms = usePermissions("expenses");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [filterDate, setFilterDate] = useState(getTodayKey());
@@ -76,13 +78,15 @@ export default function ExpensesPage() {
             color: "var(--text-primary)",
           }}
         />
-        <button
-          onClick={() => { setShowForm(true); setEditingId(null); }}
-          className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all active:scale-95"
-          style={{ background: "var(--accent)", color: "#fff" }}
-        >
-          <Plus size={15} /> Add
-        </button>
+        {perms.write && (
+          <button
+            onClick={() => { setShowForm(true); setEditingId(null); }}
+            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all active:scale-95"
+            style={{ background: "var(--accent)", color: "#fff" }}
+          >
+            <Plus size={15} /> Add
+          </button>
+        )}
       </div>
 
       {/* Add Form */}
@@ -135,20 +139,24 @@ export default function ExpensesPage() {
                   <p className="text-sm font-bold" style={{ color: "var(--orange)" }}>
                     ₹{expense.amount.toFixed(2)}
                   </p>
-                  <button
-                    onClick={() => { setEditingId(expense.id); setShowForm(false); }}
-                    className="w-8 h-8 rounded-xl flex items-center justify-center"
-                    style={{ background: "var(--accent-soft)", color: "var(--accent)" }}
-                  >
-                    <Pencil size={13} />
-                  </button>
-                  <button
-                    onClick={() => { if (confirm(`Delete "${expense.title}"?`)) deleteExpense(expense.id); }}
-                    className="w-8 h-8 rounded-xl flex items-center justify-center"
-                    style={{ background: "var(--red-soft)", color: "var(--red)" }}
-                  >
-                    <Trash2 size={13} />
-                  </button>
+                  {perms.write && (
+                    <button
+                      onClick={() => { setEditingId(expense.id); setShowForm(false); }}
+                      className="w-8 h-8 rounded-xl flex items-center justify-center"
+                      style={{ background: "var(--accent-soft)", color: "var(--accent)" }}
+                    >
+                      <Pencil size={13} />
+                    </button>
+                  )}
+                  {perms.delete && (
+                    <button
+                      onClick={() => { if (confirm(`Delete "${expense.title}"?`)) deleteExpense(expense.id); }}
+                      className="w-8 h-8 rounded-xl flex items-center justify-center"
+                      style={{ background: "var(--red-soft)", color: "var(--red)" }}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  )}
                 </div>
               </div>
             )

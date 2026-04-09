@@ -33,8 +33,9 @@ export default function LoginPage() {
       const data = await res.json();
       ['tst_cache_products', 'tst_cache_categories', 'tst_cache_transactions', 'tst_cache_expenses', 'tst_cache_inventory'].forEach(k => localStorage.removeItem(k));
       localStorage.setItem('user_role', data.user.role);
+      localStorage.setItem('user_permissions', JSON.stringify(data.user.permissions || {}));
 
-      if (data.user.role === "SUPER_ADMIN") {
+      if (data.user.role?.includes("SUPER_ADMIN")) {
         router.push("/super-admin");
       } else {
         router.push("/");

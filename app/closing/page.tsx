@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { getItem } from "@/lib/storage";
 import { KEYS } from "@/lib/storage";
+import { usePermissions } from "@/hooks/usePermissions";
 
 function PinModal({
   onConfirm,
@@ -104,6 +105,23 @@ export default function ClosingPage() {
   const [report, setReport] = useState<DailyReport | null>(null);
   const [showPinForClose, setShowPinForClose] = useState(false);
   const [dayClosed, setDayClosed] = useState(false);
+  const histPerms = usePermissions("history");
+  const adminPerms = usePermissions("admin");
+
+  const canGenerate = histPerms.read || adminPerms.read;
+  const canClose = histPerms.write || adminPerms.write;
+
+  if (histPerms.loading || adminPerms.loading) return null;
+  if (!canGenerate) {
+    return (
+      <div className="flex flex-col items-center justify-center p-12 text-center space-y-4">
+        <Lock size={48} className="text-red-500 opacity-20" />
+        <p className="text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
+          Access Denied. You do not have permission to view Closing Reports.
+        </p>
+      </div>
+    );
+  }
 
   useEffect(() => {
     const saved = getOpeningCash();
@@ -303,13 +321,13 @@ export default function ClosingPage() {
           <div className="flex gap-2 no-print">
             <button
               onClick={handleGenerate}
-              disabled={!openingSet}
+              disabled={!openingSet || !canGenerate}
               className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-all active:scale-95 disabled:opacity-40"
               style={{ background: "var(--accent)", color: "#fff" }}
             >
               <FileBarChart size={15} /> Generate Report
             </button>
-            {report && (
+            {report && canClose && (
               <button
                 onClick={() => setShowPinForClose(true)}
                 className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-all active:scale-95"

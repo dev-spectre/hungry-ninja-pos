@@ -27,6 +27,7 @@ model User {
   username     String   @unique
   passwordHash String
   role         String   // "SUPER_ADMIN", "SHOP_MANAGER", "BILLING", "KITCHEN", "INVENTORY", "BRANCH_ADMIN"
+  permissions  Json?    // Detailed RBAC permissions matrix
   branchId     String?
   branch       Branch?  @relation(fields: [branchId], references: [id], onDelete: Cascade)
   createdAt    DateTime @default(now())

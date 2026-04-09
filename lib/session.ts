@@ -7,6 +7,7 @@ export type SessionPayload = {
   name: string
   role: string
   branchId: string | null
+  permissions?: any
 }
 
 export async function encrypt(payload: SessionPayload) {

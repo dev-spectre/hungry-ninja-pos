@@ -3,6 +3,7 @@
 import { useTransactions } from "@/hooks/useTransactions";
 import { Transaction } from "@/types";
 import { formatTime, formatCurrency } from "@/lib/utils";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Trash2, ChevronDown, ChevronUp, Banknote, Smartphone, CreditCard, Clock } from "lucide-react";
 import { useState, useEffect } from "react";
 
@@ -24,7 +25,7 @@ function PaymentBadge({ mode }: { mode: string }) {
   );
 }
 
-function TransactionCard({ txn, onDelete }: { txn: Transaction; onDelete: () => void }) {
+function TransactionCard({ txn, onDelete, canDelete }: { txn: Transaction; onDelete: () => void; canDelete: boolean }) {
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -54,16 +55,18 @@ function TransactionCard({ txn, onDelete }: { txn: Transaction; onDelete: () => 
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              if (confirm("Delete this transaction?")) onDelete();
-            }}
-            className="w-8 h-8 rounded-xl flex items-center justify-center transition-all active:scale-90"
-            style={{ background: "var(--red-soft)", color: "var(--red)" }}
-          >
-            <Trash2 size={14} />
-          </button>
+          {canDelete && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (confirm("Delete this transaction?")) onDelete();
+              }}
+              className="w-8 h-8 rounded-xl flex items-center justify-center transition-all active:scale-90"
+              style={{ background: "var(--red-soft)", color: "var(--red)" }}
+            >
+              <Trash2 size={14} />
+            </button>
+          )}
           {expanded ? (
             <ChevronUp size={16} style={{ color: "var(--text-muted)" }} />
           ) : (
@@ -109,6 +112,7 @@ function TransactionCard({ txn, onDelete }: { txn: Transaction; onDelete: () => 
 
 export default function HistoryPage() {
   const { transactions, deleteTransaction, getTransactionsByDate } = useTransactions();
+  const perms = usePermissions("history");
   const [selectedDate, setSelectedDate] = useState(() => {
     const today = new Date();
     return today.toISOString().split("T")[0];
@@ -183,6 +187,7 @@ export default function HistoryPage() {
               key={txn.id}
               txn={txn}
               onDelete={() => deleteTransaction(txn.id)}
+              canDelete={perms.delete}
             />
           ))}
         </div>

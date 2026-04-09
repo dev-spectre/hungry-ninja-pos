@@ -21,6 +21,7 @@ import {
   LogOut,
 } from "lucide-react";
 import { getItem, setItem, KEYS } from "@/lib/storage";
+import { usePermissions } from "@/hooks/usePermissions";
 
 function ProductForm({
   categories,
@@ -343,6 +344,7 @@ function UserManagement() {
   const [users, setUsers] = useState<any[]>([]);
   const [showAdd, setShowAdd] = useState(false);
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const perms = usePermissions("admin");
 
   useEffect(() => {
     fetchUsers();
@@ -357,6 +359,22 @@ function UserManagement() {
     e.preventDefault();
     const formData = new FormData(e.target as HTMLFormElement);
     const data = Object.fromEntries(formData.entries());
+    
+    const permissions: any = {};
+    const syntheticRoles: string[] = [];
+    ['billing', 'history', 'expenses', 'inventory', 'admin'].forEach(page => {
+       const read = formData.get(`perm_${page}_read`) === 'on';
+       const write = formData.get(`perm_${page}_write`) === 'on';
+       const del = formData.get(`perm_${page}_delete`) === 'on';
+       permissions[page] = { read, write, delete: del };
+
+       if (read || write || del) {
+          if (page === 'billing' || page === 'history' || page === 'expenses') syntheticRoles.push('BILLING');
+          if (page === 'inventory') syntheticRoles.push('INVENTORY');
+       }
+    });
+    data.role = Array.from(new Set(syntheticRoles)).join(",");
+    data.permissions = permissions;
 
     const res = await fetch("/api/users", {
         method: "POST",
@@ -376,6 +394,19 @@ function UserManagement() {
     const formData = new FormData(e.target as HTMLFormElement);
     const data = Object.fromEntries(formData.entries());
     (data as any).id = id;
+
+    const roles = formData.getAll("role");
+    data.role = roles.join(",");
+
+    const permissions: any = {};
+    ['billing', 'history', 'expenses', 'inventory', 'admin'].forEach(page => {
+       permissions[page] = {
+          read: formData.get(`perm_${page}_read`) === 'on',
+          write: formData.get(`perm_${page}_write`) === 'on',
+          delete: formData.get(`perm_${page}_delete`) === 'on',
+       }
+    });
+    data.permissions = permissions;
 
     const res = await fetch("/api/users", {
         method: "PUT",
@@ -401,9 +432,11 @@ function UserManagement() {
     <div className="rounded-2xl overflow-hidden p-4" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
       <div className="flex justify-between items-center mb-4">
         <span className="font-semibold text-sm" style={{ color: "var(--text-primary)" }}>Staff Management ({users.length})</span>
-        <button onClick={() => setShowAdd(!showAdd)} className="text-xs font-semibold px-3 py-1.5 rounded-lg" style={{ background: "var(--accent-soft)", color: "var(--accent)" }}>
-          {showAdd ? "Close" : "+ Add Staff"}
-        </button>
+        {perms.write && (
+            <button onClick={() => setShowAdd(!showAdd)} className="text-xs font-semibold px-3 py-1.5 rounded-lg" style={{ background: "var(--accent-soft)", color: "var(--accent)" }}>
+              {showAdd ? "Close" : "+ Add Staff"}
+            </button>
+        )}
       </div>
 
       {showAdd && (
@@ -411,12 +444,20 @@ function UserManagement() {
           <input name="name" className="w-full bg-(--bg-card) p-2 text-sm rounded-lg border border-(--border)" placeholder="Display Name" required />
           <input name="username" className="w-full bg-(--bg-card) p-2 text-sm rounded-lg border border-(--border)" placeholder="Username" required />
           <input name="password" type="password" className="w-full bg-(--bg-card) p-2 text-sm rounded-lg border border-(--border)" placeholder="Password" required />
-          <select name="role" className="w-full bg-(--bg-card) p-2 text-sm rounded-lg border border-(--border)" required>
-            <option value="">Select Role</option>
-            <option value="BILLING">Billing / Cashier</option>
-            <option value="KITCHEN">Kitchen Staff</option>
-            <option value="INVENTORY">Inventory Staff</option>
-          </select>
+          <div className="mt-2 border border-(--border) rounded-lg p-2 bg-(--bg-card)">
+            <p className="text-xs font-semibold mb-2" style={{ color: "var(--text-primary)" }}>Granular Permissions</p>
+            <div className="grid grid-cols-4 gap-2 text-[10px] text-center font-bold" style={{ color: "var(--text-muted)" }}>
+              <span className="text-left">Page</span><span>Read</span><span>Write</span><span>Delete</span>
+            </div>
+            {['billing', 'history', 'expenses', 'inventory', 'admin'].map(page => (
+              <div key={page} className="grid grid-cols-4 gap-2 text-xs items-center py-1">
+                <span className="capitalize" style={{ color: "var(--text-secondary)" }}>{page}</span>
+                <input type="checkbox" name={`perm_${page}_read`} className="mx-auto" />
+                <input type="checkbox" name={`perm_${page}_write`} className="mx-auto" />
+                <input type="checkbox" name={`perm_${page}_delete`} className="mx-auto" />
+              </div>
+            ))}
+          </div>
           <button type="submit" className="w-full p-2 bg-(--accent) text-white text-sm font-semibold rounded-lg active:scale-95 transition-all">Submit</button>
         </form>
       )}
@@ -430,11 +471,20 @@ function UserManagement() {
                    <input name="username" defaultValue={u.username} className="w-full bg-(--bg-card) p-2 text-sm rounded-lg border border-(--border)" required />
                    <input name="password" placeholder="Leave blank to keep current" type="password" className="w-full bg-(--bg-card) p-2 text-sm rounded-lg border border-(--border)" />
                    
-                   <select name="role" defaultValue={u.role} className="w-full bg-(--bg-card) p-2 text-sm rounded-lg border border-(--border)" required>
-                      <option value="BILLING">Billing / Cashier</option>
-                      <option value="KITCHEN">Kitchen Staff</option>
-                      <option value="INVENTORY">Inventory Staff</option>
-                   </select>
+                   <div className="mt-2 border border-(--border) rounded-lg p-2 bg-(--bg-card)">
+                     <p className="text-xs font-semibold mb-2" style={{ color: "var(--text-primary)" }}>Granular Permissions</p>
+                     <div className="grid grid-cols-4 gap-2 text-[10px] text-center font-bold" style={{ color: "var(--text-muted)" }}>
+                       <span className="text-left">Page</span><span>Read</span><span>Write</span><span>Delete</span>
+                     </div>
+                     {['billing', 'history', 'expenses', 'inventory', 'admin'].map(page => (
+                       <div key={page} className="grid grid-cols-4 gap-2 text-xs items-center py-1">
+                         <span className="capitalize" style={{ color: "var(--text-secondary)" }}>{page}</span>
+                         <input type="checkbox" name={`perm_${page}_read`} defaultChecked={u.permissions?.[page]?.read} className="mx-auto" />
+                         <input type="checkbox" name={`perm_${page}_write`} defaultChecked={u.permissions?.[page]?.write} className="mx-auto" />
+                         <input type="checkbox" name={`perm_${page}_delete`} defaultChecked={u.permissions?.[page]?.delete} className="mx-auto" />
+                       </div>
+                     ))}
+                   </div>
 
                    <div className="flex gap-2 pt-1">
                       <button type="submit" className="flex-1 py-1.5 bg-green-500 text-white rounded-lg text-sm flex items-center justify-center"><Check size={16}/></button>
@@ -450,8 +500,8 @@ function UserManagement() {
                 </div>
                 {(u.role !== "SUPER_ADMIN" && u.role !== "SHOP_MANAGER") && (
                    <div className="flex gap-1">
-                      <button onClick={() => setEditingUserId(u.id)} className="p-2 bg-(--bg-card) hover:text-blue-500 rounded-lg"><Pencil size={14}/></button>
-                      <button onClick={() => handleDeleteUser(u.id, u.name)} className="p-2 bg-red-500/10 text-red-500 rounded-lg"><Trash2 size={14}/></button>
+                      {perms.write && <button onClick={() => setEditingUserId(u.id)} className="p-2 bg-(--bg-card) hover:text-blue-500 rounded-lg"><Pencil size={14}/></button>}
+                      {perms.delete && <button onClick={() => handleDeleteUser(u.id, u.name)} className="p-2 bg-red-500/10 text-red-500 rounded-lg"><Trash2 size={14}/></button>}
                    </div>
                 )}
              </div>
@@ -476,6 +526,7 @@ export default function AdminPage() {
   } = useProducts();
 
   const { inventoryItems } = useInventory();
+  const perms = usePermissions("admin");
 
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -572,14 +623,16 @@ export default function AdminPage() {
         <h2 className="font-bold text-base" style={{ color: "var(--text-primary)" }}>
           Products ({products.length})
         </h2>
-        <button
-          onClick={() => { setShowAddForm(!showAddForm); setEditingId(null); }}
-          className="flex items-center gap-1 px-3 py-2 rounded-xl text-sm font-semibold transition-all active:scale-95"
-          style={{ background: "var(--accent)", color: "#fff" }}
-        >
-          <Plus size={14} />
-          Add Product
-        </button>
+        {perms.write && (
+            <button
+              onClick={() => { setShowAddForm(!showAddForm); setEditingId(null); }}
+              className="flex items-center gap-1 px-3 py-2 rounded-xl text-sm font-semibold transition-all active:scale-95"
+              style={{ background: "var(--accent)", color: "#fff" }}
+            >
+              <Plus size={14} />
+              Add Product
+            </button>
+        )}
       </div>
 
       {/* Add Product Form */}
@@ -699,23 +752,27 @@ export default function AdminPage() {
                   )}
                 </button>
                 {/* Edit */}
-                <button
-                  onClick={() => { setEditingId(product.id); setShowAddForm(false); }}
-                  className="w-8 h-8 rounded-xl flex items-center justify-center"
-                  style={{ background: "var(--accent-soft)", color: "var(--accent)" }}
-                >
-                  <Pencil size={13} />
-                </button>
+                {perms.write && (
+                    <button
+                      onClick={() => { setEditingId(product.id); setShowAddForm(false); }}
+                      className="w-8 h-8 rounded-xl flex items-center justify-center"
+                      style={{ background: "var(--accent-soft)", color: "var(--accent)" }}
+                    >
+                      <Pencil size={13} />
+                    </button>
+                )}
                 {/* Delete */}
-                <button
-                  onClick={() => {
-                    if (confirm(`Delete "${product.name}"?`)) deleteProduct(product.id);
-                  }}
-                  className="w-8 h-8 rounded-xl flex items-center justify-center"
-                  style={{ background: "var(--red-soft)", color: "var(--red)" }}
-                >
-                  <Trash2 size={13} />
-                </button>
+                {perms.delete && (
+                    <button
+                      onClick={() => {
+                        if (confirm(`Delete "${product.name}"?`)) deleteProduct(product.id);
+                      }}
+                      className="w-8 h-8 rounded-xl flex items-center justify-center"
+                      style={{ background: "var(--red-soft)", color: "var(--red)" }}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                )}
               </div>
             </div>
           )

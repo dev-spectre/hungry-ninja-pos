@@ -2,6 +2,10 @@ export function formatCurrency(amount: number): string {
   return `₹${amount.toFixed(2)}`;
 }
 
+export function round2(num: number): number {
+  return Math.round(num * 100) / 100;
+}
+
 export function formatCurrencyShort(amount: number): string {
   return `₹${amount % 1 === 0 ? amount.toFixed(0) : amount.toFixed(2)}`;
 }

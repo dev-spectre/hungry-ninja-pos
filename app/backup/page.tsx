@@ -10,6 +10,7 @@ import {
   CheckCircle,
   Database,
 } from "lucide-react";
+import { usePermissions } from "@/hooks/usePermissions";
 
 const ALL_KEYS = [
   KEYS.OPENING_CASH,
@@ -41,6 +42,19 @@ export default function BackupPage() {
   const [restoreState, setRestoreState] = useState<"idle" | "confirm" | "success" | "error">("idle");
   const [pendingBackup, setPendingBackup] = useState<BackupFile | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
+  const { read: canRead, write: canWrite, loading } = usePermissions("admin");
+
+  if (loading) return null;
+  if (!canRead) {
+    return (
+      <div className="flex flex-col items-center justify-center p-12 text-center space-y-4">
+        <ShieldCheck size={48} className="text-red-500 opacity-20" />
+        <p className="text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
+          Access Denied. You do not have permission to access Backup & Restore.
+        </p>
+      </div>
+    );
+  }
 
   // ── Export ─────────────────────────────────────────────────────
   const handleExport = useCallback(() => {
@@ -147,7 +161,8 @@ export default function BackupPage() {
         </p>
         <button
           onClick={handleExport}
-          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-all active:scale-95"
+          disabled={!canRead}
+          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-all active:scale-95 disabled:opacity-50"
           style={{ background: "var(--green)", color: "#fff" }}
         >
           <Download size={15} /> Download Backup JSON
@@ -177,8 +192,9 @@ export default function BackupPage() {
           onChange={handleFileChange}
         />
         <button
-          onClick={() => { setRestoreState("idle"); fileInput.current?.click(); }}
-          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-all active:scale-95"
+          onClick={() => { if (canWrite) { setRestoreState("idle"); fileInput.current?.click(); } }}
+          disabled={!canWrite}
+          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-all active:scale-95 disabled:opacity-50"
           style={{ background: "var(--blue-soft)", color: "var(--blue)", border: "1px solid var(--blue)" }}
         >
           <Upload size={15} /> Choose Backup File

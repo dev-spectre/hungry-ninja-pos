@@ -1,5 +1,20 @@
 export type PaymentMode = "cash" | "upi" | "card";
 
+export type PagePermissions = {
+  read: boolean;
+  write: boolean;
+  delete: boolean;
+};
+
+export type UserPermissions = {
+  billing?: PagePermissions;
+  history?: PagePermissions;
+  expenses?: PagePermissions;
+  inventory?: PagePermissions;
+  admin?: PagePermissions;
+};
+
+
 export type ExpenseCategory =
   | "raw_materials"
   | "salary"

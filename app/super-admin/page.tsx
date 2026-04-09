@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Plus, Trash, LogOut, Building, User, Pencil, Play, Check, X } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { PermissionsGrid } from "@/components/admin/PermissionsGrid";
 
 export default function SuperAdminDashboard() {
   const [activeTab, setActiveTab] = useState<"branches" | "users">("branches");
@@ -45,7 +46,28 @@ export default function SuperAdminDashboard() {
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     const formData = new FormData(e.target as HTMLFormElement);
-    const data = Object.fromEntries(formData.entries());
+    const data: any = Object.fromEntries(formData.entries());
+
+    const permissions: any = {};
+    const syntheticRoles: string[] = [];
+    ['billing', 'history', 'expenses', 'inventory', 'admin'].forEach(page => {
+       const read = formData.get(`perm_${page}_read`) === 'on';
+       const write = formData.get(`perm_${page}_write`) === 'on';
+       const del = formData.get(`perm_${page}_delete`) === 'on';
+       permissions[page] = { read, write, delete: del };
+
+       if (read || write || del) {
+          if (page === 'billing' || page === 'history' || page === 'expenses') syntheticRoles.push('BILLING');
+          if (page === 'inventory') syntheticRoles.push('INVENTORY');
+          if (page === 'admin') {
+              if (data.isGlobalAdmin === "on") syntheticRoles.push('SUPER_ADMIN');
+              else syntheticRoles.push('SHOP_MANAGER');
+          }
+       }
+    });
+
+    data.role = Array.from(new Set(syntheticRoles)).join(",");
+    data.permissions = permissions;
 
     await fetch("/api/users", {
         method: "POST",
@@ -58,8 +80,29 @@ export default function SuperAdminDashboard() {
   const handleEditUser = async (e: React.FormEvent, id: string) => {
     e.preventDefault();
     const formData = new FormData(e.target as HTMLFormElement);
-    const data = Object.fromEntries(formData.entries());
-    (data as any).id = id;
+    const data: any = Object.fromEntries(formData.entries());
+    data.id = id;
+
+    const permissions: any = {};
+    const syntheticRoles: string[] = [];
+    ['billing', 'history', 'expenses', 'inventory', 'admin'].forEach(page => {
+       const read = formData.get(`perm_${page}_read`) === 'on';
+       const write = formData.get(`perm_${page}_write`) === 'on';
+       const del = formData.get(`perm_${page}_delete`) === 'on';
+       permissions[page] = { read, write, delete: del };
+
+       if (read || write || del) {
+          if (page === 'billing' || page === 'history' || page === 'expenses') syntheticRoles.push('BILLING');
+          if (page === 'inventory') syntheticRoles.push('INVENTORY');
+          if (page === 'admin') {
+              if (data.isGlobalAdmin === "on") syntheticRoles.push('SUPER_ADMIN');
+              else syntheticRoles.push('SHOP_MANAGER');
+          }
+       }
+    });
+
+    data.role = Array.from(new Set(syntheticRoles)).join(",");
+    data.permissions = permissions;
 
     await fetch("/api/users", {
         method: "PUT",
@@ -197,15 +240,12 @@ export default function SuperAdminDashboard() {
               <input name="name" className="w-full bg-(--bg-elevated) p-3 rounded-xl border border-(--border)" placeholder="Display Name" required />
               <input name="username" className="w-full bg-(--bg-elevated) p-3 rounded-xl border border-(--border)" placeholder="Username" required />
               <input name="password" type="password" className="w-full bg-(--bg-elevated) p-3 rounded-xl border border-(--border)" placeholder="Password" required />
-              
-              <select name="role" className="w-full bg-(--bg-elevated) p-3 rounded-xl border border-(--border)" required>
-                <option value="">Select Role</option>
-                <option value="SUPER_ADMIN">Super Admin (Global)</option>
-                <option value="SHOP_MANAGER">Shop Manager</option>
-                <option value="BILLING">Billing / Cashier</option>
-                <option value="KITCHEN">Kitchen</option>
-                <option value="INVENTORY">Inventory Admin</option>
-              </select>
+              <label className="flex items-center gap-2 px-1 text-sm text-(--text-primary)">
+                <input type="checkbox" name="isGlobalAdmin" className="w-4 h-4 rounded border-(--border)" />
+                Is Global Super Admin? (Grants system-wide overrides)
+              </label>
+
+              <PermissionsGrid />
 
               <select name="branchId" className="w-full bg-(--bg-elevated) p-3 rounded-xl border border-(--border)">
                 <option value="">Assign to Branch (Optional for Super Admin)</option>
@@ -232,14 +272,12 @@ export default function SuperAdminDashboard() {
                      <input name="name" defaultValue={u.name} className="w-full bg-(--bg-elevated) p-2 text-sm rounded-lg border border-(--border)" required />
                      <input name="username" defaultValue={u.username} className="w-full bg-(--bg-elevated) p-2 text-sm rounded-lg border border-(--border)" required />
                      <input name="password" placeholder="Leave blank to keep current" type="password" className="w-full bg-(--bg-elevated) p-2 text-sm rounded-lg border border-(--border)" />
-                     
-                     <select name="role" defaultValue={u.role} className="w-full bg-(--bg-elevated) p-2 text-sm rounded-lg border border-(--border)" required>
-                        <option value="SUPER_ADMIN">Super Admin (Global)</option>
-                        <option value="SHOP_MANAGER">Shop Manager</option>
-                        <option value="BILLING">Billing / Cashier</option>
-                        <option value="KITCHEN">Kitchen</option>
-                        <option value="INVENTORY">Inventory Admin</option>
-                     </select>
+                     <label className="flex items-center gap-2 px-1 text-sm text-(--text-primary)">
+                        <input type="checkbox" name="isGlobalAdmin" defaultChecked={u.role.includes('SUPER_ADMIN')} className="w-4 h-4 rounded border-(--border)" />
+                        Is Global Super Admin? (Grants system-wide overrides)
+                     </label>
+
+                     <PermissionsGrid initialPermissions={u.permissions} />
                      <select name="branchId" defaultValue={u.branchId || ""} className="w-full bg-(--bg-elevated) p-2 text-sm rounded-lg border border-(--border)">
                         <option value="">No Branch (Global)</option>
                         {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}

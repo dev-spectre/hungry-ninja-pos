@@ -8,7 +8,7 @@ export async function GET(request: Request) {
     const isGlobal = searchParams.get("global") === "true";
     const role = await getUserRole();
 
-    if (isGlobal && role === "SUPER_ADMIN") {
+    if (isGlobal && role?.includes("SUPER_ADMIN")) {
         const items = await prisma.inventoryItem.findMany({
             include: { branch: true },
             orderBy: { name: "asc" }

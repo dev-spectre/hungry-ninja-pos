@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useMemo } from "react";
 import { BillItem, Product, PaymentMode, BillItemRecord } from "@/types";
+import { round2 } from "@/lib/utils";
 
 export function useBill() {
   const [items, setItems] = useState<BillItem[]>([]);
@@ -41,7 +42,7 @@ export function useBill() {
   }, []);
 
   const grandTotal = useMemo(
-    () => items.reduce((sum, i) => sum + i.product.price * i.quantity, 0),
+    () => round2(items.reduce((sum, i) => sum + i.product.price * i.quantity, 0)),
     [items]
   );
 
@@ -56,7 +57,7 @@ export function useBill() {
       productName: i.product.name,
       price: i.product.price,
       quantity: i.quantity,
-      subtotal: i.product.price * i.quantity,
+      subtotal: round2(i.product.price * i.quantity),
     }));
   }, [items]);
 

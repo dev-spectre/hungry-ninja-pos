@@ -5,6 +5,7 @@ import { useProducts } from "@/hooks/useProducts";
 import { useBill } from "@/hooks/useBill";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useInventory } from "@/hooks/useInventory";
+import { usePermissions } from "@/hooks/usePermissions";
 import { PaymentMode, Product } from "@/types";
 import CategoryTabs from "@/components/billing/CategoryTabs";
 import SearchBar from "@/components/billing/SearchBar";
@@ -20,6 +21,7 @@ export default function BillingPage() {
   const { items, grandTotal, addItem, updateQuantity, removeItem, clearBill, toBillRecords, isEmpty } = useBill();
   const { saveTransaction } = useTransactions();
   const { deductStock } = useInventory();
+  const perms = usePermissions("billing");
 
   const [activeCategoryId, setActiveCategoryId] = useState<string>("__all__");
   const [toast, setToast] = useState<string | null>(null);
@@ -180,8 +182,8 @@ export default function BillingPage() {
                 ▲ Collapse
               </button>
             </div>
-            <BillPanel items={items} grandTotal={grandTotal} onUpdateQty={updateQuantity} onRemove={removeItem} onClear={clearBill} />
-            <PaymentButtons onPay={handlePay} disabled={isEmpty} />
+            <BillPanel items={items} grandTotal={grandTotal} onUpdateQty={updateQuantity} onRemove={perms.delete ? removeItem : () => {}} onClear={perms.delete ? clearBill : () => {}} />
+            {perms.write && <PaymentButtons onPay={handlePay} disabled={isEmpty} />}
           </div>
         )}
       </div>

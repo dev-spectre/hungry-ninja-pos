@@ -21,7 +21,7 @@ export async function proxy(req: NextRequest) {
   }
 
   if (path === '/login' && session) {
-    if (session.role === 'SUPER_ADMIN') {
+    if (session.role.includes('SUPER_ADMIN')) {
         return NextResponse.redirect(new URL('/super-admin', req.nextUrl))
     }
     return NextResponse.redirect(new URL('/', req.nextUrl))
@@ -31,9 +31,12 @@ export async function proxy(req: NextRequest) {
   if (session) {
       requestHeaders.set('x-user-id', session.id)
       requestHeaders.set('x-user-role', session.role)
+      if (session.permissions) {
+          requestHeaders.set('x-user-permissions', JSON.stringify(session.permissions))
+      }
       if (session.branchId) {
           requestHeaders.set('x-user-branch', session.branchId)
-      } else if (session.role === 'SUPER_ADMIN') {
+      } else if (session.role.includes('SUPER_ADMIN')) {
           const activeBranch = req.cookies.get('active_branch_id')?.value;
           if (activeBranch) {
               requestHeaders.set('x-user-branch', activeBranch)

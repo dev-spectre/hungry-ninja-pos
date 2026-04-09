@@ -24,6 +24,7 @@ export async function POST(req: NextRequest) {
       id: user.id,
       name: user.name,
       role: user.role,
+      permissions: (user as any).permissions,
       branchId: user.branchId,
     };
 

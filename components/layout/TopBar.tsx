@@ -57,12 +57,12 @@ export default function TopBar() {
         </span>
       </div>
       <div className="ml-auto flex items-center gap-4">
-        {role === "SUPER_ADMIN" && (
+        {role?.includes("SUPER_ADMIN") && (
            <Link href="/super-admin" className="text-sm flex gap-1 flex-col items-center justify-between font-medium text-(--text-muted) hover:text-(--accent)">
              <LayoutDashboardIcon size={16} />
            </Link>
         )}
-        {role === "SHOP_MANAGER" && (
+        {role?.includes("SHOP_MANAGER") && (
           <Link href="/dashboard" className="text-sm flex gap-1 flex-col items-center justify-between font-medium text-(--text-muted) hover:text-(--accent)">
             <LayoutDashboardIcon size={16} />
           </Link>
