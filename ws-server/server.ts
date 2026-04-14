@@ -5,7 +5,7 @@ import { WebSocketServer, WebSocket } from "ws";
 type JoinMessage = { type: "JOIN"; branchId: string };
 type PublishBody = { branchId: string; message: unknown };
 
-const WS_PORT = Number(process.env.PORT || process.env.WS_PORT || 3001);
+const WS_PORT = Number(process.env.PORT || process.env.WS_PORT || 10000);
 const PUBLISH_SECRET = process.env.WS_PUBLISH_SECRET || "";
 
 const rooms = new Map<string, Set<WebSocket>>();
@@ -31,6 +31,13 @@ function broadcast(branchId: string, message: unknown) {
 }
 
 const server = http.createServer(async (req, res) => {
+  // Health check endpoints for Render/Docker
+  if (req.method === "GET" && (req.url === "/" || req.url === "/healthz")) {
+    res.statusCode = 200;
+    res.end("OK");
+    return;
+  }
+
   if (req.method !== "POST" || req.url !== "/publish") {
     res.statusCode = 404;
     res.end("Not found");
@@ -107,7 +114,7 @@ wss.on("connection", (ws) => {
   });
 });
 
-setInterval(() => {
+const intervalId = setInterval(() => {
   for (const ws of wss.clients) {
     const ok = heartbeats.get(ws) ?? false;
     if (!ok) {
@@ -132,3 +139,29 @@ server.listen(WS_PORT, () => {
   console.log(`[ws-server] listening on :${WS_PORT}`);
 });
 
+// Graceful shutdown handling for environments like Render / Docker
+const shutdown = () => {
+  // eslint-disable-next-line no-console
+  console.log("[ws-server] SIGTERM signal received: closing HTTP server");
+  clearInterval(intervalId);
+  
+  // Terminate all active WebSocket connections
+  for (const ws of wss.clients) {
+    try {
+      ws.terminate();
+    } catch {
+      // ignore
+    }
+  }
+
+  wss.close(() => {
+    server.close(() => {
+      // eslint-disable-next-line no-console
+      console.log("[ws-server] HTTP server closed");
+      process.exit(0);
+    });
+  });
+};
+
+process.on("SIGTERM", shutdown);
+process.on("SIGINT", shutdown);
