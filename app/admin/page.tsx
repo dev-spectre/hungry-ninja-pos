@@ -19,6 +19,7 @@ import {
   FileBarChart,
   Users,
   LogOut,
+  Table2,
 } from "lucide-react";
 import { getItem, setItem, KEYS } from "@/lib/storage";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -362,7 +363,7 @@ function UserManagement() {
     
     const permissions: any = {};
     const syntheticRoles: string[] = [];
-    ['billing', 'history', 'expenses', 'inventory', 'admin'].forEach(page => {
+    ['billing', 'history', 'expenses', 'inventory', 'kitchen', 'admin'].forEach(page => {
        const read = formData.get(`perm_${page}_read`) === 'on';
        const write = formData.get(`perm_${page}_write`) === 'on';
        const del = formData.get(`perm_${page}_delete`) === 'on';
@@ -371,6 +372,7 @@ function UserManagement() {
        if (read || write || del) {
           if (page === 'billing' || page === 'history' || page === 'expenses') syntheticRoles.push('BILLING');
           if (page === 'inventory') syntheticRoles.push('INVENTORY');
+          if (page === 'kitchen') syntheticRoles.push('KITCHEN');
        }
     });
     data.role = Array.from(new Set(syntheticRoles)).join(",");
@@ -399,7 +401,7 @@ function UserManagement() {
     data.role = roles.join(",");
 
     const permissions: any = {};
-    ['billing', 'history', 'expenses', 'inventory', 'admin'].forEach(page => {
+    ['billing', 'history', 'expenses', 'inventory', 'kitchen', 'admin'].forEach(page => {
        permissions[page] = {
           read: formData.get(`perm_${page}_read`) === 'on',
           write: formData.get(`perm_${page}_write`) === 'on',
@@ -449,7 +451,7 @@ function UserManagement() {
             <div className="grid grid-cols-4 gap-2 text-[10px] text-center font-bold" style={{ color: "var(--text-muted)" }}>
               <span className="text-left">Page</span><span>Read</span><span>Write</span><span>Delete</span>
             </div>
-            {['billing', 'history', 'expenses', 'inventory', 'admin'].map(page => (
+            {['billing', 'history', 'expenses', 'inventory', 'kitchen', 'admin'].map(page => (
               <div key={page} className="grid grid-cols-4 gap-2 text-xs items-center py-1">
                 <span className="capitalize" style={{ color: "var(--text-secondary)" }}>{page}</span>
                 <input type="checkbox" name={`perm_${page}_read`} className="mx-auto" />
@@ -476,7 +478,7 @@ function UserManagement() {
                      <div className="grid grid-cols-4 gap-2 text-[10px] text-center font-bold" style={{ color: "var(--text-muted)" }}>
                        <span className="text-left">Page</span><span>Read</span><span>Write</span><span>Delete</span>
                      </div>
-                     {['billing', 'history', 'expenses', 'inventory', 'admin'].map(page => (
+                     {['billing', 'history', 'expenses', 'inventory', 'kitchen', 'admin'].map(page => (
                        <div key={page} className="grid grid-cols-4 gap-2 text-xs items-center py-1">
                          <span className="capitalize" style={{ color: "var(--text-secondary)" }}>{page}</span>
                          <input type="checkbox" name={`perm_${page}_read`} defaultChecked={u.permissions?.[page]?.read} className="mx-auto" />
@@ -527,6 +529,11 @@ export default function AdminPage() {
 
   const { inventoryItems } = useInventory();
   const perms = usePermissions("admin");
+  const [role, setRole] = useState<string | null>(null);
+
+  useEffect(() => {
+    setRole(localStorage.getItem("user_role"));
+  }, []);
 
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -553,7 +560,17 @@ export default function AdminPage() {
   return (
     <div className="p-4 space-y-4">
       {/* Admin Quick Links */}
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-4 gap-2">
+        {(role?.includes("SUPER_ADMIN") || role?.includes("SHOP_MANAGER")) && (
+          <Link
+            href="/admin/tables"
+            className="flex flex-col items-center gap-1.5 p-3 rounded-2xl text-xs font-medium transition-all active:scale-95"
+            style={{ background: "var(--accent-soft)", color: "var(--accent)" }}
+          >
+            <Table2 size={18} />
+            Tables
+          </Link>
+        )}
         <Link
           href="/backup"
           className="flex flex-col items-center gap-1.5 p-3 rounded-2xl text-xs font-medium transition-all active:scale-95"

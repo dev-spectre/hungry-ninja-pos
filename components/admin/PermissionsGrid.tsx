@@ -6,7 +6,7 @@ interface PermissionsGridProps {
   initialPermissions?: UserPermissions | null;
 }
 
-const PAGES = ['billing', 'history', 'expenses', 'inventory', 'admin'] as const;
+const PAGES = ['billing', 'history', 'expenses', 'inventory', 'kitchen', 'admin'] as const;
 
 export function PermissionsGrid({ initialPermissions }: PermissionsGridProps) {
   return (

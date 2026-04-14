@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Category, Product } from "@/types";
-import { getItem, setItem, KEYS } from "@/lib/storage";
+import { getItem, setItem, KEYS, branchKey } from "@/lib/storage";
 import { generateId } from "@/lib/utils";
 
 // In-memory flags to prevent redundant DB fetches across page navigations
@@ -18,8 +18,8 @@ export function useProducts() {
     let cancelled = false;
 
     // 1. Instant load from cache
-    const cachedProducts = getItem<Product[]>(KEYS.CACHE_PRODUCTS);
-    const cachedCategories = getItem<Category[]>(KEYS.CACHE_CATEGORIES);
+    const cachedProducts = getItem<Product[]>(branchKey(KEYS.CACHE_PRODUCTS));
+    const cachedCategories = getItem<Category[]>(branchKey(KEYS.CACHE_CATEGORIES));
     if (cachedProducts) setProducts(cachedProducts);
     if (cachedCategories) setCategories(cachedCategories);
     setInitialized(true);
@@ -37,12 +37,12 @@ export function useProducts() {
         let fetchedAny = false;
         if (Array.isArray(prods)) {
           setProducts(prods);
-          setItem(KEYS.CACHE_PRODUCTS, prods);
+          setItem(branchKey(KEYS.CACHE_PRODUCTS), prods);
           fetchedAny = true;
         }
         if (Array.isArray(cats)) {
           setCategories(cats);
-          setItem(KEYS.CACHE_CATEGORIES, cats);
+          setItem(branchKey(KEYS.CACHE_CATEGORIES), cats);
           fetchedAny = true;
         }
         if (fetchedAny) {
@@ -64,7 +64,7 @@ export function useProducts() {
 
       setProducts((prev) => {
         const updated = [...prev, newProduct];
-        setItem(KEYS.CACHE_PRODUCTS, updated);
+        setItem(branchKey(KEYS.CACHE_PRODUCTS), updated);
         return updated;
       });
 
@@ -90,7 +90,7 @@ export function useProducts() {
            alert("Couldn't add product to the database. Please try again later.");
            setProducts((prev) => {
              const reverted = prev.filter(p => p.id !== newProduct.id);
-             setItem(KEYS.CACHE_PRODUCTS, reverted);
+             setItem(branchKey(KEYS.CACHE_PRODUCTS), reverted);
              return reverted;
            });
          }
@@ -105,7 +105,7 @@ export function useProducts() {
       setProducts((prev) => {
         originalProduct = prev.find(p => p.id === id);
         const updated = prev.map((p) => (p.id === id ? { ...p, ...data } : p));
-        setItem(KEYS.CACHE_PRODUCTS, updated);
+        setItem(branchKey(KEYS.CACHE_PRODUCTS), updated);
         return updated;
       });
 
@@ -131,7 +131,7 @@ export function useProducts() {
            alert("Couldn't update the product. Reverting changes...");
            setProducts((prev) => {
              const reverted = prev.map(p => p.id === id ? { ...p, ...(originalProduct || {}) } : p);
-             setItem(KEYS.CACHE_PRODUCTS, reverted);
+             setItem(branchKey(KEYS.CACHE_PRODUCTS), reverted);
              return reverted;
            });
          }
@@ -146,7 +146,7 @@ export function useProducts() {
       setProducts((prev) => {
         deletedItem = prev.find(p => p.id === id);
         const updated = prev.filter((p) => p.id !== id);
-        setItem(KEYS.CACHE_PRODUCTS, updated);
+        setItem(branchKey(KEYS.CACHE_PRODUCTS), updated);
         return updated;
       });
 
@@ -158,7 +158,7 @@ export function useProducts() {
         if (deletedItem) {
           setProducts((prev) => {
             const reverted = [...prev, deletedItem!];
-            setItem(KEYS.CACHE_PRODUCTS, reverted);
+            setItem(branchKey(KEYS.CACHE_PRODUCTS), reverted);
             return reverted;
           });
         }
@@ -179,7 +179,7 @@ export function useProducts() {
         const updated = prev.map((p) =>
           p.id === id ? { ...p, active: newActive! } : p
         );
-        setItem(KEYS.CACHE_PRODUCTS, updated);
+        setItem(branchKey(KEYS.CACHE_PRODUCTS), updated);
         return updated;
       });
 
@@ -212,7 +212,7 @@ export function useProducts() {
           return p;
         });
 
-        setItem(KEYS.CACHE_PRODUCTS, updated);
+        setItem(branchKey(KEYS.CACHE_PRODUCTS), updated);
 
         if (updates.length > 0) {
           bulkFrequencies = updates.map((u) => u.id);
@@ -244,7 +244,7 @@ export function useProducts() {
         if (prev.some((c) => c.name.toLowerCase() === name.toLowerCase())) return prev;
         const newCat: Category = { id, name };
         const updated = [...prev, newCat];
-        setItem(KEYS.CACHE_CATEGORIES, updated);
+        setItem(branchKey(KEYS.CACHE_CATEGORIES), updated);
         didMutate = true;
         return updated;
       });
@@ -267,7 +267,7 @@ export function useProducts() {
     (id: string, name: string) => {
       setCategories((prev) => {
         const updated = prev.map((c) => (c.id === id ? { ...c, name } : c));
-        setItem(KEYS.CACHE_CATEGORIES, updated);
+        setItem(branchKey(KEYS.CACHE_CATEGORIES), updated);
         return updated;
       });
 
@@ -284,12 +284,12 @@ export function useProducts() {
     (id: string) => {
       setCategories((prev) => {
         const updated = prev.filter((c) => c.id !== id);
-        setItem(KEYS.CACHE_CATEGORIES, updated);
+        setItem(branchKey(KEYS.CACHE_CATEGORIES), updated);
         return updated;
       });
       setProducts((prev) => {
         const updated = prev.filter((p) => p.categoryId !== id);
-        setItem(KEYS.CACHE_PRODUCTS, updated);
+        setItem(branchKey(KEYS.CACHE_PRODUCTS), updated);
         return updated;
       });
 

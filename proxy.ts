@@ -8,7 +8,9 @@ export async function proxy(req: NextRequest) {
   const rawPath = req.nextUrl.pathname
   const path = rawPath.endsWith('/') && rawPath !== '/' ? rawPath.slice(0, -1) : rawPath;
   
-  const isPublic = publicPaths.some(p => path === p || path.startsWith('/_next/'))
+  const isOrderPage = path === "/order" || path.startsWith("/order/");
+  const isPublicApi = path === "/api/public" || path.startsWith("/api/public/");
+  const isPublic = isOrderPage || isPublicApi || publicPaths.some(p => path === p || path.startsWith('/_next/'))
 
   const cookie = req.cookies.get('session')?.value
   const session = await decrypt(cookie)

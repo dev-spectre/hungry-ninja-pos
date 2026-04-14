@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Plus, Trash, LogOut, Building, User, Pencil, Play, Check, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { PermissionsGrid } from "@/components/admin/PermissionsGrid";
+import { clearBranchCache } from "@/lib/storage";
 
 export default function SuperAdminDashboard() {
   const [activeTab, setActiveTab] = useState<"branches" | "users">("branches");
@@ -50,7 +51,7 @@ export default function SuperAdminDashboard() {
 
     const permissions: any = {};
     const syntheticRoles: string[] = [];
-    ['billing', 'history', 'expenses', 'inventory', 'admin'].forEach(page => {
+    ['billing', 'history', 'expenses', 'inventory', 'kitchen', 'admin'].forEach(page => {
        const read = formData.get(`perm_${page}_read`) === 'on';
        const write = formData.get(`perm_${page}_write`) === 'on';
        const del = formData.get(`perm_${page}_delete`) === 'on';
@@ -59,6 +60,7 @@ export default function SuperAdminDashboard() {
        if (read || write || del) {
           if (page === 'billing' || page === 'history' || page === 'expenses') syntheticRoles.push('BILLING');
           if (page === 'inventory') syntheticRoles.push('INVENTORY');
+          if (page === 'kitchen') syntheticRoles.push('KITCHEN');
           if (page === 'admin') {
               if (data.isGlobalAdmin === "on") syntheticRoles.push('SUPER_ADMIN');
               else syntheticRoles.push('SHOP_MANAGER');
@@ -85,7 +87,7 @@ export default function SuperAdminDashboard() {
 
     const permissions: any = {};
     const syntheticRoles: string[] = [];
-    ['billing', 'history', 'expenses', 'inventory', 'admin'].forEach(page => {
+    ['billing', 'history', 'expenses', 'inventory', 'kitchen', 'admin'].forEach(page => {
        const read = formData.get(`perm_${page}_read`) === 'on';
        const write = formData.get(`perm_${page}_write`) === 'on';
        const del = formData.get(`perm_${page}_delete`) === 'on';
@@ -94,6 +96,7 @@ export default function SuperAdminDashboard() {
        if (read || write || del) {
           if (page === 'billing' || page === 'history' || page === 'expenses') syntheticRoles.push('BILLING');
           if (page === 'inventory') syntheticRoles.push('INVENTORY');
+          if (page === 'kitchen') syntheticRoles.push('KITCHEN');
           if (page === 'admin') {
               if (data.isGlobalAdmin === "on") syntheticRoles.push('SUPER_ADMIN');
               else syntheticRoles.push('SHOP_MANAGER');
@@ -140,7 +143,7 @@ export default function SuperAdminDashboard() {
   };
 
   const handleViewBranch = (id: string) => {
-     ['tst_cache_products', 'tst_cache_categories', 'tst_cache_transactions', 'tst_cache_expenses', 'tst_cache_inventory'].forEach(k => localStorage.removeItem(k));
+     clearBranchCache();
      document.cookie = `active_branch_id=${id}; path=/;`;
      localStorage.setItem('active_branch_id', id);
      router.push("/");

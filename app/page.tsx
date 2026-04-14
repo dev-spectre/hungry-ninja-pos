@@ -16,6 +16,24 @@ import { CheckCircle, X } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { getItem, KEYS } from "@/lib/storage";
 
+type TableOrderItem = {
+  id: string;
+  productId: string;
+  productName: string;
+  productPrice: number;
+  quantity: number;
+  subtotal: number;
+};
+type TableOrder = {
+  id: string;
+  status: "PENDING" | "ACCEPTED" | "REJECTED" | "BILLED";
+  transactionId?: string | null;
+  totalAmount: number;
+  createdAt: string;
+  table: { id: string; name: string };
+  items: TableOrderItem[];
+};
+
 export default function BillingPage() {
   const { products, categories, initialized, getProductsByCategory, incrementFrequency } = useProducts();
   const { items, grandTotal, addItem, updateQuantity, removeItem, clearBill, toBillRecords, isEmpty } = useBill();
@@ -28,6 +46,11 @@ export default function BillingPage() {
   const [billOpen, setBillOpen] = useState(false);
   const [showUpiQr, setShowUpiQr] = useState(false);
   const [upiId, setUpiId] = useState<string>("");
+
+  const [tableOrdersOpen, setTableOrdersOpen] = useState(false);
+  const [tableOrdersLoading, setTableOrdersLoading] = useState(false);
+  const [tableOrders, setTableOrders] = useState<TableOrder[]>([]);
+  const [activeTableOrderId, setActiveTableOrderId] = useState<string | null>(null);
 
   useEffect(() => {
     // Load UPI ID if configured
@@ -50,19 +73,31 @@ export default function BillingPage() {
   const completePayment = useCallback(
     (mode: PaymentMode) => {
       const records = toBillRecords();
-      saveTransaction(records, grandTotal, mode);
+      const txn = saveTransaction(records, grandTotal, mode);
       const ids = items.map((i) => i.product.id);
       incrementFrequency(ids);
       
-      // Deduct inventory stock
-      deductStock(items.map((i) => ({ product: i.product, quantity: i.quantity })));
+      // Deduct inventory stock only for non-table orders.
+      // Table orders are deducted when Kitchen ACCEPTS.
+      if (!activeTableOrderId) {
+        deductStock(items.map((i) => ({ product: i.product, quantity: i.quantity })));
+      }
       
+      if (activeTableOrderId) {
+        fetch(`/api/kitchen/orders/${encodeURIComponent(activeTableOrderId)}/bill`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ transactionId: txn.id }),
+        }).catch(() => {});
+        setActiveTableOrderId(null);
+      }
+
       clearBill();
       setBillOpen(false);
       setShowUpiQr(false);
       showToast(`₹${grandTotal.toFixed(2)} paid via ${mode.toUpperCase()} ✓`);
     },
-    [toBillRecords, saveTransaction, grandTotal, items, incrementFrequency, deductStock, clearBill, showToast],
+    [toBillRecords, saveTransaction, grandTotal, items, incrementFrequency, deductStock, clearBill, showToast, activeTableOrderId],
   );
 
   const handlePay = useCallback(
@@ -82,6 +117,44 @@ export default function BillingPage() {
   const totalItems = items.reduce((s, i) => s + i.quantity, 0);
 
   const qrValue = `upi://pay?pa=${upiId}&pn=Merchant&am=${grandTotal.toFixed(2)}&cu=INR`;
+
+  const openTableOrders = useCallback(async () => {
+    setTableOrdersOpen(true);
+    setTableOrdersLoading(true);
+    try {
+      const res = await fetch("/api/kitchen/orders?status=ACCEPTED");
+      const data = await res.json().catch(() => []);
+      if (res.ok && Array.isArray(data)) {
+        setTableOrders(data);
+      } else {
+        setTableOrders([]);
+      }
+    } finally {
+      setTableOrdersLoading(false);
+    }
+  }, []);
+
+  const loadTableOrder = useCallback(
+    (order: TableOrder) => {
+      clearBill();
+      for (const line of order.items) {
+        const product: Product = {
+          id: line.productId,
+          name: line.productName,
+          price: line.productPrice,
+          categoryId: "",
+          active: true,
+          orderFrequency: 0,
+        };
+        addItem(product);
+        updateQuantity(product.id, line.quantity);
+      }
+      setActiveTableOrderId(order.id);
+      setTableOrdersOpen(false);
+      setBillOpen(true);
+    },
+    [addItem, clearBill, updateQuantity],
+  );
 
   return (
     <div className="flex flex-col h-full relative">
@@ -132,8 +205,79 @@ export default function BillingPage() {
         </div>
       )}
 
+      {/* Table Orders Modal */}
+      {tableOrdersOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-3xl shadow-2xl border" style={{ background: "var(--bg-secondary)", borderColor: "var(--border)" }}>
+            <div className="px-5 py-4 flex items-center justify-between border-b" style={{ borderColor: "var(--border)" }}>
+              <div>
+                <div className="font-extrabold" style={{ color: "var(--text-primary)" }}>Table Orders</div>
+                <div className="text-xs" style={{ color: "var(--text-muted)" }}>Accepted orders waiting for billing</div>
+              </div>
+              <button
+                onClick={() => setTableOrdersOpen(false)}
+                className="w-10 h-10 rounded-2xl flex items-center justify-center"
+                style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
+                aria-label="Close"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="px-5 py-4 max-h-[70vh] overflow-y-auto">
+              {tableOrdersLoading ? (
+                <div className="text-sm" style={{ color: "var(--text-muted)" }}>Loading…</div>
+              ) : tableOrders.length === 0 ? (
+                <div className="text-sm" style={{ color: "var(--text-muted)" }}>No table orders right now.</div>
+              ) : (
+                <div className="space-y-3">
+                  {tableOrders.map((o) => (
+                    <button
+                      key={o.id}
+                      onClick={() => loadTableOrder(o)}
+                      className="w-full text-left rounded-2xl p-4 border transition-all active:scale-[0.99]"
+                      style={{ background: "var(--bg-elevated)", borderColor: "var(--border)" }}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="font-extrabold" style={{ color: "var(--text-primary)" }}>{o.table?.name ?? "Table"}</div>
+                          <div className="text-xs" style={{ color: "var(--text-muted)" }}>
+                            {o.items.reduce((s, i) => s + i.quantity, 0)} items • ₹{o.totalAmount}
+                          </div>
+                        </div>
+                        <div className="text-xs font-extrabold px-3 py-1 rounded-full" style={{ background: "var(--green-soft)", color: "var(--green)" }}>
+                          Accepted
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Product Section */}
       <div className="flex flex-col flex-1 min-h-0">
+        {/* Table Orders Button */}
+        <div className="px-4 pt-3">
+          <button
+            onClick={openTableOrders}
+            className="w-full flex items-center justify-between px-4 py-3 rounded-2xl font-extrabold text-sm"
+            style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
+          >
+            <span>Table Orders</span>
+            {activeTableOrderId ? (
+              <span className="text-xs font-extrabold px-3 py-1 rounded-full" style={{ background: "var(--accent-soft)", color: "var(--accent)" }}>
+                Loaded
+              </span>
+            ) : (
+              <span className="text-xs" style={{ color: "var(--text-muted)" }}>View →</span>
+            )}
+          </button>
+        </div>
+
         {/* Search */}
         <div className="pt-2">
           <SearchBar products={products.filter((p) => p.active)} onSelect={(p: Product) => addItem(p)} />

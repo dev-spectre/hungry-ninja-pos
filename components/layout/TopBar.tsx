@@ -12,8 +12,10 @@ const titles: Record<string, string> = {
   "/history": "Sales History",
   "/super-admin": "System Administration",
   "/admin": "Product Admin",
+  "/admin/tables": "Tables",
   "/expenses": "Expenses",
   "/inventory": "Inventory",
+  "/kitchen": "Kitchen Display",
   "/closing": "Closing Report",
   "/backup": "Backup & Restore",
 };
@@ -38,7 +40,7 @@ export default function TopBar() {
     window.location.href = "/login";
   };
 
-  if (!mounted || pathname === '/login') return null;
+  if (!mounted || pathname === "/login" || pathname.startsWith("/order/")) return null;
 
   return (
     <header

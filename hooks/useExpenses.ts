@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Expense, ExpenseCategory } from "@/types";
-import { getItem, setItem, KEYS } from "@/lib/storage";
+import { getItem, setItem, KEYS, branchKey } from "@/lib/storage";
 import { getTodayKey, generateId } from "@/lib/utils";
 
 // In-memory flag so we only fetch expenses once per session
@@ -16,7 +16,7 @@ export function useExpenses() {
     let cancelled = false;
 
     // 1. Instant load from cache
-    const cached = getItem<Expense[]>(KEYS.CACHE_EXPENSES);
+    const cached = getItem<Expense[]>(branchKey(KEYS.CACHE_EXPENSES));
     if (cached) setExpenses(cached);
 
     // 2. Skip DB refresh if we already fetched this session
@@ -28,7 +28,7 @@ export function useExpenses() {
       .then((data) => {
         if (!cancelled && Array.isArray(data)) {
           setExpenses(data);
-          setItem(KEYS.CACHE_EXPENSES, data);
+          setItem(branchKey(KEYS.CACHE_EXPENSES), data);
           sessionExpensesFetched = true;
         }
       })
@@ -47,7 +47,7 @@ export function useExpenses() {
 
       setExpenses((prev) => {
         const updated = [...prev, newExpense];
-        setItem(KEYS.CACHE_EXPENSES, updated);
+        setItem(branchKey(KEYS.CACHE_EXPENSES), updated);
         return updated;
       });
 
@@ -64,7 +64,7 @@ export function useExpenses() {
     (id: string, data: Partial<Omit<Expense, "id" | "createdAt">>) => {
       setExpenses((prev) => {
         const updated = prev.map((e) => (e.id === id ? { ...e, ...data } : e));
-        setItem(KEYS.CACHE_EXPENSES, updated);
+        setItem(branchKey(KEYS.CACHE_EXPENSES), updated);
         return updated;
       });
     },
@@ -75,7 +75,7 @@ export function useExpenses() {
     (id: string) => {
       setExpenses((prev) => {
         const updated = prev.filter((e) => e.id !== id);
-        setItem(KEYS.CACHE_EXPENSES, updated);
+        setItem(branchKey(KEYS.CACHE_EXPENSES), updated);
         return updated;
       });
 

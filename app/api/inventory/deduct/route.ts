@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getBranchId } from "@/lib/auth";
+import { deductInventory } from "@/lib/deductInventory";
 
 export async function POST(request: Request) {
   try {
@@ -13,40 +14,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true });
     }
 
-    // 1. Fetch all ingredients for the products in this sale
-    const productIds = sales.map((s: any) => s.productId);
-    const allIngredients = await prisma.productIngredient.findMany({
-       where: { 
-          productId: { in: productIds },
-          product: { branchId }
-       }
-    });
-
-    // 2. Aggregate the total amounts to deduct per inventory item
-    const deductions = new Map<string, number>();
-    for (const sale of sales) {
-       const productIngs = allIngredients.filter((i: any) => i.productId === sale.productId);
-       for (const ing of productIngs) {
-          const amount = ing.quantityNeeded * sale.quantity;
-          deductions.set(
-             ing.inventoryItemId,
-             (deductions.get(ing.inventoryItemId) || 0) + amount
-          );
-       }
-    }
-
-    // 3. Prepare the atomic decrements
-    const updates = Array.from(deductions.entries()).map(([itemId, amount]) => 
-       prisma.inventoryItem.update({
-          where: { id: itemId, branchId },
-          data: {
-             currentStock: { decrement: amount }
-          }
-       })
-    );
-
-    // 4. Execute all atomically as a fast non-interactive bulk transaction
-    await prisma.$transaction(updates);
+    await deductInventory({ prisma, branchId, sales });
 
     // Return the updated full inventory list so client can refresh properly
     const updatedInventory = await prisma.inventoryItem.findMany({

@@ -19,6 +19,8 @@ model Branch {
   transactions Transaction[]
   expenses     Expense[]
   dailyReports DailyReport[]
+  tables       Table[]
+  customerOrders CustomerOrder[]
 }
 
 model User {
@@ -57,6 +59,54 @@ model Product {
   branch         Branch              @relation(fields: [branchId], references: [id], onDelete: Cascade)
   billItems      BillItemRecord[]
   ingredients    ProductIngredient[]
+  customerOrderItems CustomerOrderItem[]
+}
+
+model Table {
+  id        String          @id @default(uuid())
+  name      String          // "Table 1", "Table 2", etc.
+  branchId  String
+  branch    Branch          @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  qrToken   String          @unique @default(uuid()) // encoded in QR URL, rotatable
+  isActive  Boolean         @default(true)
+  orders    CustomerOrder[]
+  createdAt DateTime        @default(now())
+
+  @@unique([name, branchId])
+}
+
+model CustomerOrder {
+  id            String              @id @default(uuid())
+  tableId       String
+  table         Table               @relation(fields: [tableId], references: [id], onDelete: Cascade)
+  branchId      String
+  branch        Branch              @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  status        CustomerOrderStatus @default(PENDING)
+  items         CustomerOrderItem[]
+  totalAmount   Float               @default(0)
+  notes         String?
+  transactionId String?             // set when billing converts this to a Transaction
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+}
+
+enum CustomerOrderStatus {
+  PENDING   // Waiting in kitchen queue
+  ACCEPTED  // Kitchen accepted → in billing queue
+  REJECTED  // Kitchen rejected → no inventory change
+  BILLED    // Payment done → linked to Transaction
+}
+
+model CustomerOrderItem {
+  id              String        @id @default(uuid())
+  customerOrderId String
+  customerOrder   CustomerOrder @relation(fields: [customerOrderId], references: [id], onDelete: Cascade)
+  productId       String
+  productName     String        // price-locked snapshot
+  productPrice    Float         // price-locked snapshot
+  quantity        Int
+  subtotal        Float
+  product         Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
 }
 
 model InventoryItem {

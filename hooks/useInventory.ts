@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { InventoryItem } from "@/types";
-import { getItem, setItem, KEYS } from "@/lib/storage";
+import { getItem, setItem, KEYS, branchKey } from "@/lib/storage";
 import { generateId } from "@/lib/utils";
 
 let sessionInventoryFetched = false;
@@ -15,7 +15,7 @@ export function useInventory() {
     let cancelled = false;
 
     // 1. Instant load from cache
-    const cached = getItem<InventoryItem[]>(KEYS.CACHE_INVENTORY);
+    const cached = getItem<InventoryItem[]>(branchKey(KEYS.CACHE_INVENTORY));
     if (cached) setInventoryItems(cached);
     setInitialized(true);
 
@@ -28,14 +28,14 @@ export function useInventory() {
       .then((data) => {
         if (!cancelled && Array.isArray(data)) {
           setInventoryItems(data);
-          setItem(KEYS.CACHE_INVENTORY, data);
+          setItem(branchKey(KEYS.CACHE_INVENTORY), data);
           sessionInventoryFetched = true;
         }
       })
       .catch((err) => console.error("Failed to load inventory:", err));
 
     const handleLocalUpdate = () => {
-      const cached = getItem<InventoryItem[]>(KEYS.CACHE_INVENTORY);
+      const cached = getItem<InventoryItem[]>(branchKey(KEYS.CACHE_INVENTORY));
       if (cached) setInventoryItems(cached);
     };
 
@@ -60,7 +60,7 @@ export function useInventory() {
 
     setInventoryItems((prev) => {
       const updated = [...prev, newItem];
-      setItem(KEYS.CACHE_INVENTORY, updated);
+      setItem(branchKey(KEYS.CACHE_INVENTORY), updated);
       return updated;
     });
 
@@ -74,7 +74,7 @@ export function useInventory() {
   const updateItem = useCallback((id: string, data: Partial<Omit<InventoryItem, "id">>) => {
     setInventoryItems((prev) => {
       const updated = prev.map((item) => (item.id === id ? { ...item, ...data } : item));
-      setItem(KEYS.CACHE_INVENTORY, updated);
+      setItem(branchKey(KEYS.CACHE_INVENTORY), updated);
       return updated;
     });
 
@@ -88,7 +88,7 @@ export function useInventory() {
   const deleteItem = useCallback((id: string) => {
     setInventoryItems((prev) => {
       const updated = prev.filter((item) => item.id !== id);
-      setItem(KEYS.CACHE_INVENTORY, updated);
+      setItem(branchKey(KEYS.CACHE_INVENTORY), updated);
       return updated;
     });
 
@@ -114,7 +114,7 @@ export function useInventory() {
           }
         }
       }
-      setItem(KEYS.CACHE_INVENTORY, optimistics);
+      setItem(branchKey(KEYS.CACHE_INVENTORY), optimistics);
       return optimistics;
     });
 
@@ -130,7 +130,7 @@ export function useInventory() {
         if (res.ok) {
           res.json().then((updatedItems) => {
              if (Array.isArray(updatedItems)) {
-                setItem(KEYS.CACHE_INVENTORY, updatedItems);
+                setItem(branchKey(KEYS.CACHE_INVENTORY), updatedItems);
              }
           });
         }

@@ -11,6 +11,7 @@ export type UserPermissions = {
   history?: PagePermissions;
   expenses?: PagePermissions;
   inventory?: PagePermissions;
+  kitchen?: PagePermissions;
   admin?: PagePermissions;
 };
 

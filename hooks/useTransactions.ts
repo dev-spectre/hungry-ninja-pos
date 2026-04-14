@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Transaction, BillItemRecord, PaymentMode, DailySummary } from "@/types";
-import { getItem, setItem, KEYS } from "@/lib/storage";
+import { getItem, setItem, KEYS, branchKey } from "@/lib/storage";
 import { getTodayKey, generateId } from "@/lib/utils";
 
 // In-memory flag for dates successfully fetched this session
@@ -17,7 +17,7 @@ export function useTransactions() {
     const today = getTodayKey();
 
     // 1. Instant load from cache (filter to today)
-    const cached = getItem<Transaction[]>(KEYS.CACHE_TRANSACTIONS);
+    const cached = getItem<Transaction[]>(branchKey(KEYS.CACHE_TRANSACTIONS));
     if (cached) {
       setTransactions(cached.filter((t) => t.date === today));
     }
@@ -31,7 +31,7 @@ export function useTransactions() {
       .then((data) => {
         if (!cancelled && Array.isArray(data)) {
           setTransactions(data);
-          setItem(KEYS.CACHE_TRANSACTIONS, data);
+          setItem(branchKey(KEYS.CACHE_TRANSACTIONS), data);
           sessionFetchedDates.add(today);
         }
       })
@@ -53,7 +53,7 @@ export function useTransactions() {
 
       setTransactions((prev) => {
         const updated = [...prev, txn];
-        setItem(KEYS.CACHE_TRANSACTIONS, updated);
+        setItem(branchKey(KEYS.CACHE_TRANSACTIONS), updated);
         return updated;
       });
 
@@ -71,7 +71,7 @@ export function useTransactions() {
   const deleteTransaction = useCallback((id: string) => {
     setTransactions((prev) => {
       const updated = prev.filter((t) => t.id !== id);
-      setItem(KEYS.CACHE_TRANSACTIONS, updated);
+      setItem(branchKey(KEYS.CACHE_TRANSACTIONS), updated);
       return updated;
     });
 
@@ -131,7 +131,7 @@ export function useTransactions() {
         .then((data) => {
           if (Array.isArray(data)) {
             setTransactions(data);
-            setItem(KEYS.CACHE_TRANSACTIONS, data);
+            setItem(branchKey(KEYS.CACHE_TRANSACTIONS), data);
           }
         })
         .catch(console.error);

@@ -73,11 +73,16 @@ export function useClosingReport() {
       const report = await generateReport(todayTxns, todayExpenses);
 
       // Save report to DB
-      await fetch("/api/reports", {
+      const res = await fetch("/api/reports", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(report),
       });
+      if (!res.ok) {
+        const j = await res.json().catch(() => null);
+        const msg = j?.error || `Failed to close day (HTTP ${res.status})`;
+        throw new Error(msg);
+      }
 
       // Clear opening cash
       removeItem(KEYS.OPENING_CASH);

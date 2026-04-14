@@ -1,8 +1,0 @@
--- AlterTable
-ALTER TABLE "DailyReport" ALTER COLUMN "archivedAt" SET DATA TYPE DOUBLE PRECISION;
-
--- AlterTable
-ALTER TABLE "Expense" ALTER COLUMN "createdAt" SET DATA TYPE DOUBLE PRECISION;
-
--- AlterTable
-ALTER TABLE "Transaction" ALTER COLUMN "timestamp" SET DATA TYPE DOUBLE PRECISION;

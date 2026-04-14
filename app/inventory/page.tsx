@@ -5,6 +5,12 @@ import { useInventory } from "@/hooks/useInventory";
 import { INVENTORY_UNITS, InventoryItem } from "@/types";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Plus, Pencil, Trash2, AlertTriangle, Package, Check, X, Search } from "lucide-react";
+import { round2 } from "@/lib/utils";
+
+function fmtQty(n: number) {
+  const r = round2(n);
+  return Number.isInteger(r) ? String(r) : String(r);
+}
 
 function InventoryForm({
   initial,
@@ -151,7 +157,7 @@ export default function InventoryPage() {
              <div className="flex flex-wrap gap-2 mt-2">
                 {lowStockItems.slice(0, 3).map(item => (
                    <span key={item.id} className="text-[10px] px-2 py-0.5 rounded-md font-medium" style={{ background: "var(--bg-card)", color: "var(--red)" }}>
-                      {item.name} ({item.currentStock} {item.unit})
+                      {item.name} ({fmtQty(item.currentStock)} {item.unit})
                    </span>
                 ))}
                 {lowStockItems.length > 3 && (
@@ -246,9 +252,9 @@ export default function InventoryPage() {
                    </div>
                    <div className="flex items-center gap-3 text-xs" style={{ color: "var(--text-muted)" }}>
                        <span className="font-medium" style={{ color: isLowStock ? "var(--red)" : "var(--green)" }}>
-                          Stock: {item.currentStock} {item.unit}
+                         Stock: {fmtQty(item.currentStock)} {item.unit}
                        </span>
-                       <span>Alert at: {item.lowStockThreshold} {item.unit}</span>
+                       <span>Alert at: {fmtQty(item.lowStockThreshold)} {item.unit}</span>
                    </div>
                 </div>
                 

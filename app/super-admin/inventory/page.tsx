@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Package, AlertTriangle, Building2 } from "lucide-react";
+import { round2 } from "@/lib/utils";
 
 interface GlobalInventoryItem {
   id: string;
@@ -71,8 +72,8 @@ export default function GlobalInventory() {
                        </p>
                     </div>
                     <div className="text-right">
-                       <p className="text-sm font-bold text-red-500">{item.currentStock} <span className="text-xs font-medium">{item.unit}</span></p>
-                       <p className="text-[10px] text-red-500/70">Threshold: {item.lowStockThreshold}</p>
+                       <p className="text-sm font-bold text-red-500">{round2(item.currentStock)} <span className="text-xs font-medium">{item.unit}</span></p>
+                       <p className="text-[10px] text-red-500/70">Threshold: {round2(item.lowStockThreshold)}</p>
                     </div>
                  </div>
               ))}
@@ -98,9 +99,9 @@ export default function GlobalInventory() {
                     </div>
                     <div className="text-right">
                        <p className={`text-sm font-bold ${isLow ? 'text-red-500' : 'text-(--text-primary)'}`}>
-                          {item.currentStock} <span className="text-xs font-medium">{item.unit}</span>
+                          {round2(item.currentStock)} <span className="text-xs font-medium">{item.unit}</span>
                        </p>
-                       <p className="text-[10px] text-(--text-muted)">Threshold: {item.lowStockThreshold}</p>
+                       <p className="text-[10px] text-(--text-muted)">Threshold: {round2(item.lowStockThreshold)}</p>
                     </div>
                  </div>
                  )
