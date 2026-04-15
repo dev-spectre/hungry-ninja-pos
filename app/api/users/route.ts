@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+
+export const dynamic = "force-dynamic";
 import { getBranchId, getUserRole } from "@/lib/auth";
 import bcrypt from "bcryptjs";
 
@@ -38,7 +40,7 @@ export async function POST(req: Request) {
             return NextResponse.json({error: "Forbidden"}, {status: 403});
         }
 
-        let targetBranchId = branchId;
+        let targetBranchId: string | null = branchId === "" ? null : branchId;
         if (r === "SHOP_MANAGER") {
             if (role?.includes("SUPER_ADMIN") || role?.includes("SHOP_MANAGER")) {
                 return NextResponse.json({error: "Cannot create manager or super admin"}, {status: 403});
@@ -76,6 +78,22 @@ export async function PUT(req: Request) {
 
         const existing = await prisma.user.findUnique({ where: { id } });
         if (!existing) return NextResponse.json({error: "User not found"}, {status: 404});
+
+        if (existing.role.includes("SUPER_ADMIN")) {
+             const originalAdmin = await prisma.user.findFirst({
+                 where: { role: { contains: "SUPER_ADMIN" } },
+                 orderBy: { createdAt: "asc" },
+                 select: { id: true },
+             });
+             if (originalAdmin && originalAdmin.id === id) {
+                 if (!role.includes("SUPER_ADMIN")) {
+                     return NextResponse.json({ error: "Cannot downgrade original super admin" }, { status: 403 });
+                 }
+                 if (branchId && branchId !== "") {
+                     return NextResponse.json({ error: "Original super admin must be global (no branch)" }, { status: 403 });
+                 }
+             }
+        }
 
         if (r === "SHOP_MANAGER" && existing.branchId !== b) {
             return NextResponse.json({error: "Forbidden, user is not in your branch"}, {status: 403});
@@ -123,6 +141,18 @@ export async function DELETE(req: Request) {
         }
         if (r.includes("SHOP_MANAGER") && (userToDelete.role.includes("SUPER_ADMIN") || userToDelete.role.includes("SHOP_MANAGER"))) {
              return NextResponse.json({error: "Forbidden, cannot delete manager"}, {status: 403});
+        }
+
+        // Protect the original super admin (first-created SUPER_ADMIN)
+        if (userToDelete.role.includes("SUPER_ADMIN")) {
+            const originalAdmin = await prisma.user.findFirst({
+                where: { role: { contains: "SUPER_ADMIN" } },
+                orderBy: { createdAt: "asc" },
+                select: { id: true },
+            });
+            if (originalAdmin && originalAdmin.id === id) {
+                return NextResponse.json({ error: "Cannot delete the original super admin" }, { status: 403 });
+            }
         }
 
         await prisma.user.delete({ where: { id } });
