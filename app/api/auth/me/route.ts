@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { decrypt } from "@/lib/session";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(req: NextRequest) {
   const cookie = req.cookies.get("session")?.value;
   const session = await decrypt(cookie);

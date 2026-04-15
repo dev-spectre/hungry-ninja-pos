@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getBranchId } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
+
 function getTodayRange() {
   const start = new Date();
   start.setHours(0, 0, 0, 0);

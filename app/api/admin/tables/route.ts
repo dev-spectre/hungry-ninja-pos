@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getBranchId, getUserRole } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
+
 function isManager(role: string | null) {
   return !!role && (role.includes("SUPER_ADMIN") || role.includes("SHOP_MANAGER"));
 }
