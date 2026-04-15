@@ -3,13 +3,14 @@ import "./globals.css";
 import BottomNav from "@/components/layout/BottomNav";
 import TopBar from "@/components/layout/TopBar";
 import ThemeProvider from "@/components/layout/ThemeProvider";
+import FetchInterceptor from "@/components/layout/FetchInterceptor";
+import { Toaster } from "react-hot-toast";
 
 export const metadata: Metadata = {
   title: "PoS",
   description: "Point of Sale system for bakery and snack shops",
   manifest: "/manifest.json",
 };
-
 
 export default function RootLayout({
   children,
@@ -29,7 +30,22 @@ export default function RootLayout({
         <meta name="theme-color" content="#0f172a" />
       </head>
       <body className="flex flex-col h-screen overflow-hidden" style={{ background: "var(--bg-primary)" }}>
+        <FetchInterceptor />
         <ThemeProvider>
+          <Toaster 
+            position="top-right" 
+            toastOptions={{
+              duration: 3000,
+              style: {
+                background: "var(--bg-elevated)",
+                color: "var(--text-primary)",
+                border: "1px solid var(--border)",
+                borderRadius: "1rem",
+                fontSize: "14px",
+                fontWeight: 600,
+              },
+            }}
+          />
           <TopBar />
           <main className="flex-1 overflow-y-auto pb-20">
             {children}

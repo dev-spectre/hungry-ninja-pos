@@ -11,6 +11,7 @@ import {
   Receipt,
   TrendingDown,
   FileBarChart,
+  ClipboardList,
 } from "lucide-react";
 import SummaryCard from "@/components/dashboard/SummaryCard";
 import TopProducts from "@/components/dashboard/TopProducts";
@@ -45,6 +46,10 @@ export default function DashboardPage() {
   const todayLabel = formatDate(getTodayKey());
   const txnCount = transactions.length;
 
+  const cashOrders = transactions.filter(t => t.paymentMode === "cash").length;
+  const upiOrders = transactions.filter(t => t.paymentMode === "upi").length;
+  const cardOrders = transactions.filter(t => t.paymentMode === "card").length;
+
   const cards = [
     {
       label: "Total Sales Today",
@@ -52,7 +57,15 @@ export default function DashboardPage() {
       icon: <IndianRupee size={20} />,
       color: "var(--accent)",
       bgColor: "var(--accent-soft)",
-      subtitle: `${txnCount} bills`,
+      subtitle: `${txnCount} orders`,
+    },
+    {
+      label: "Total Orders",
+      value: txnCount.toString(),
+      icon: <ClipboardList size={20} />,
+      color: "var(--blue)",
+      bgColor: "var(--blue-soft)",
+      subtitle: `Cash: ${cashOrders} · UPI: ${upiOrders} · Card: ${cardOrders}`,
     },
     {
       label: "Cash Sales",
@@ -60,6 +73,7 @@ export default function DashboardPage() {
       icon: <Banknote size={20} />,
       color: "var(--green)",
       bgColor: "var(--green-soft)",
+      subtitle: `${cashOrders} orders`,
     },
     {
       label: "UPI Sales",
@@ -67,6 +81,7 @@ export default function DashboardPage() {
       icon: <Smartphone size={20} />,
       color: "var(--yellow)",
       bgColor: "var(--yellow-soft)",
+      subtitle: `${upiOrders} orders`,
     },
     {
       label: "Card Sales",
@@ -74,6 +89,7 @@ export default function DashboardPage() {
       icon: <CreditCard size={20} />,
       color: "var(--blue)",
       bgColor: "var(--blue-soft)",
+      subtitle: `${cardOrders} orders`,
     },
     {
       label: "Total Items Sold",
@@ -122,13 +138,17 @@ export default function DashboardPage() {
         <div className="col-span-2">
           <SummaryCard {...cards[0]} />
         </div>
+        {/* Total Orders — full width */}
+        <div className="col-span-2">
+          <SummaryCard {...cards[1]} />
+        </div>
         {/* Cash, UPI, Card, Items */}
-        {cards.slice(1, 5).map((card) => (
+        {cards.slice(2, 6).map((card) => (
           <SummaryCard key={card.label} {...card} />
         ))}
-        {/* Expenses + Net Profit — full width each */}
-        <SummaryCard {...cards[5]} />
+        {/* Expenses + Net Profit */}
         <SummaryCard {...cards[6]} />
+        <SummaryCard {...cards[7]} />
       </div>
 
       {/* Top Products */}

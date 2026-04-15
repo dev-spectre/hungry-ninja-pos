@@ -36,12 +36,12 @@ export async function POST(req: Request) {
         
         const { name, username, password, role, branchId, permissions } = await req.json();
 
-        if (r !== "SUPER_ADMIN" && r !== "SHOP_MANAGER") {
+        if (!r?.includes("SUPER_ADMIN") && !r?.includes("SHOP_MANAGER")) {
             return NextResponse.json({error: "Forbidden"}, {status: 403});
         }
 
         let targetBranchId: string | null = branchId === "" ? null : branchId;
-        if (r === "SHOP_MANAGER") {
+        if (r?.includes("SHOP_MANAGER")) {
             if (role?.includes("SUPER_ADMIN") || role?.includes("SHOP_MANAGER")) {
                 return NextResponse.json({error: "Cannot create manager or super admin"}, {status: 403});
             }
@@ -72,7 +72,7 @@ export async function PUT(req: Request) {
         const { id, name, username, password, role, branchId, permissions } = await req.json();
         if (!id) return NextResponse.json({ error: "Missing ID" }, { status: 400 });
 
-        if (r !== "SUPER_ADMIN" && r !== "SHOP_MANAGER") {
+        if (!r?.includes("SUPER_ADMIN") && !r?.includes("SHOP_MANAGER")) {
             return NextResponse.json({error: "Forbidden"}, {status: 403});
         }
 
@@ -95,12 +95,20 @@ export async function PUT(req: Request) {
              }
         }
 
-        if (r === "SHOP_MANAGER" && existing.branchId !== b) {
+        if (r?.includes("SHOP_MANAGER") && existing.branchId !== b) {
             return NextResponse.json({error: "Forbidden, user is not in your branch"}, {status: 403});
         }
 
-        let targetBranchId = branchId !== undefined ? branchId : existing.branchId;
-        if (r === "SHOP_MANAGER") targetBranchId = b;
+        let targetBranchId: string | null = null;
+        if (branchId === "") {
+            targetBranchId = null;
+        } else if (branchId !== undefined) {
+            targetBranchId = branchId;
+        } else {
+            targetBranchId = existing.branchId;
+        }
+
+        if (r?.includes("SHOP_MANAGER")) targetBranchId = b;
 
         const updateData: any = { name, username, role, branchId: targetBranchId, permissions };
         if (password && password.trim() !== "") {
@@ -129,14 +137,14 @@ export async function DELETE(req: Request) {
         const r = await getUserRole();
         const b = await getBranchId();
 
-        if (r !== "SUPER_ADMIN" && r !== "SHOP_MANAGER") {
+        if (!r?.includes("SUPER_ADMIN") && !r?.includes("SHOP_MANAGER")) {
             return NextResponse.json({error: "Forbidden"}, {status: 403});
         }
 
         const userToDelete = await prisma.user.findUnique({ where: { id } });
         if (!userToDelete) return NextResponse.json({error: "User not found"}, {status: 404});
 
-        if (r === "SHOP_MANAGER" && userToDelete.branchId !== b) {
+        if (r?.includes("SHOP_MANAGER") && userToDelete.branchId !== b) {
             return NextResponse.json({error: "Forbidden, user is not in your branch"}, {status: 403});
         }
         if (r.includes("SHOP_MANAGER") && (userToDelete.role.includes("SUPER_ADMIN") || userToDelete.role.includes("SHOP_MANAGER"))) {

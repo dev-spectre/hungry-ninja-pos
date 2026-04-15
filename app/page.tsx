@@ -12,7 +12,7 @@ import SearchBar from "@/components/billing/SearchBar";
 import ProductCard from "@/components/billing/ProductCard";
 import BillPanel from "@/components/billing/BillPanel";
 import PaymentButtons from "@/components/billing/PaymentButtons";
-import { CheckCircle, X } from "lucide-react";
+import { CheckCircle, X, Loader2 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { getItem, KEYS } from "@/lib/storage";
 
@@ -51,6 +51,7 @@ export default function BillingPage() {
   const [tableOrdersLoading, setTableOrdersLoading] = useState(false);
   const [tableOrders, setTableOrders] = useState<TableOrder[]>([]);
   const [activeTableOrderId, setActiveTableOrderId] = useState<string | null>(null);
+  const [processingPayment, setProcessingPayment] = useState(false);
 
   useEffect(() => {
     // Load UPI ID if configured
@@ -72,6 +73,9 @@ export default function BillingPage() {
 
   const completePayment = useCallback(
     (mode: PaymentMode) => {
+      if (processingPayment) return;
+      setProcessingPayment(true);
+      
       const records = toBillRecords();
       const txn = saveTransaction(records, grandTotal, mode);
       const ids = items.map((i) => i.product.id);
@@ -92,12 +96,15 @@ export default function BillingPage() {
         setActiveTableOrderId(null);
       }
 
-      clearBill();
-      setBillOpen(false);
-      setShowUpiQr(false);
-      showToast(`₹${grandTotal.toFixed(2)} paid via ${mode.toUpperCase()} ✓`);
+      setTimeout(() => {
+        clearBill();
+        setBillOpen(false);
+        setShowUpiQr(false);
+        setProcessingPayment(false);
+        showToast(`₹${grandTotal.toFixed(2)} paid via ${mode.toUpperCase()} ✓`);
+      }, 300);
     },
-    [toBillRecords, saveTransaction, grandTotal, items, incrementFrequency, deductStock, clearBill, showToast, activeTableOrderId],
+    [toBillRecords, saveTransaction, grandTotal, items, incrementFrequency, deductStock, clearBill, showToast, activeTableOrderId, processingPayment],
   );
 
   const handlePay = useCallback(
@@ -196,9 +203,11 @@ export default function BillingPage() {
               </button>
               <button
                 onClick={() => completePayment("upi")}
-                className="flex-1 py-3.5 rounded-xl font-bold text-white shadow-lg shadow-indigo-200 transition-transform active:scale-95"
+                disabled={processingPayment}
+                className="flex-1 py-3.5 rounded-xl font-bold text-white shadow-lg shadow-indigo-200 transition-transform active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
                 style={{ background: "linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)" }}>
-                Done
+                {processingPayment ? <Loader2 size={18} className="animate-spin" /> : null}
+                {processingPayment ? "Processing..." : "Done"}
               </button>
             </div>
           </div>
@@ -327,7 +336,7 @@ export default function BillingPage() {
               </button>
             </div>
             <BillPanel items={items} grandTotal={grandTotal} onUpdateQty={updateQuantity} onRemove={perms.delete ? removeItem : () => {}} onClear={perms.delete ? clearBill : () => {}} />
-            {perms.write && <PaymentButtons onPay={handlePay} disabled={isEmpty} />}
+            {perms.write && <PaymentButtons onPay={handlePay} disabled={isEmpty || processingPayment} />}
           </div>
         )}
       </div>

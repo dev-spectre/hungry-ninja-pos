@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useInventory } from "@/hooks/useInventory";
 import { INVENTORY_UNITS, InventoryItem } from "@/types";
 import { usePermissions } from "@/hooks/usePermissions";
-import { Plus, Pencil, Trash2, AlertTriangle, Package, Check, X, Search } from "lucide-react";
+import { Plus, Pencil, Trash2, AlertTriangle, Package, Check, X, Search, Loader2 } from "lucide-react";
 import { round2 } from "@/lib/utils";
 
 function fmtQty(n: number) {
@@ -16,10 +16,12 @@ function InventoryForm({
   initial,
   onSave,
   onCancel,
+  isSaving,
 }: {
   initial?: Partial<InventoryItem>;
   onSave: (data: Omit<InventoryItem, "id" | "createdAt">) => void;
   onCancel: () => void;
+  isSaving: boolean;
 }) {
   const [name, setName] = useState(initial?.name ?? "");
   const [unit, setUnit] = useState(initial?.unit ?? INVENTORY_UNITS[0].value);
@@ -44,16 +46,17 @@ function InventoryForm({
   }
 
   return (
-    <div className="rounded-2xl p-4 space-y-3" style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)" }}>
+    <div className="rounded-2xl p-4 space-y-3" style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", opacity: isSaving ? 0.7 : 1 }}>
       <div className="space-y-3">
         <div>
            <label className="text-xs font-medium mb-1 block" style={{ color: "var(--text-secondary)" }}>Item Name</label>
            <input
              type="text"
              value={name}
+             disabled={isSaving}
              onChange={(e) => setName(e.target.value)}
              placeholder="e.g. Milk, Cheese, Pizza Base"
-             className="w-full px-3 py-2.5 rounded-xl outline-none text-sm"
+             className="w-full px-3 py-2.5 rounded-xl outline-none text-sm disabled:opacity-50"
              style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
            />
         </div>
@@ -63,8 +66,9 @@ function InventoryForm({
             <label className="text-xs font-medium mb-1 block" style={{ color: "var(--text-secondary)" }}>Unit</label>
             <select
               value={unit}
+              disabled={isSaving}
               onChange={(e) => setUnit(e.target.value)}
-              className="w-full px-3 py-2.5 rounded-xl outline-none text-sm"
+              className="w-full px-3 py-2.5 rounded-xl outline-none text-sm disabled:opacity-50"
               style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
             >
               {INVENTORY_UNITS.map((u) => (
@@ -79,10 +83,11 @@ function InventoryForm({
             <input
               type="number"
               value={currentStock}
+              disabled={isSaving}
               onChange={(e) => setCurrentStock(e.target.value)}
               placeholder="0.0"
               step="any"
-              className="w-full px-3 py-2.5 rounded-xl outline-none text-sm"
+              className="w-full px-3 py-2.5 rounded-xl outline-none text-sm disabled:opacity-50"
               style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
             />
           </div>
@@ -93,10 +98,11 @@ function InventoryForm({
             <input
               type="number"
               value={lowStockThreshold}
+              disabled={isSaving}
               onChange={(e) => setLowStockThreshold(e.target.value)}
               placeholder="5"
               step="any"
-              className="w-full px-3 py-2.5 rounded-xl outline-none text-sm"
+              className="w-full px-3 py-2.5 rounded-xl outline-none text-sm disabled:opacity-50"
               style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
             />
             <p className="text-[10px] mt-1" style={{ color: "var(--text-muted)" }}>Get alerted when stock falls to this amount.</p>
@@ -108,14 +114,17 @@ function InventoryForm({
       <div className="flex gap-2 pt-2">
         <button
           onClick={handleSave}
-          className="flex-1 flex items-center justify-center gap-1 py-2.5 rounded-xl text-sm font-semibold transition-all active:scale-95"
+          disabled={isSaving}
+          className="flex-1 flex items-center justify-center gap-1 py-2.5 rounded-xl text-sm font-semibold transition-all active:scale-95 disabled:opacity-50"
           style={{ background: "var(--accent)", color: "#fff" }}
         >
-          <Check size={14} /> Save
+          {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+          {isSaving ? "Saving..." : "Save"}
         </button>
         <button
           onClick={onCancel}
-          className="flex-1 flex items-center justify-center gap-1 py-2.5 rounded-xl text-sm font-medium transition-all active:scale-95"
+          disabled={isSaving}
+          className="flex-1 flex items-center justify-center gap-1 py-2.5 rounded-xl text-sm font-medium transition-all active:scale-95 disabled:opacity-50"
           style={{ background: "var(--bg-card)", color: "var(--text-secondary)", border: "1px solid var(--border)" }}
         >
           <X size={14} /> Cancel
@@ -129,6 +138,7 @@ export default function InventoryPage() {
   const {
     inventoryItems,
     lowStockItems,
+    pendingOps,
     addItem,
     updateItem,
     deleteItem,
@@ -206,6 +216,7 @@ export default function InventoryPage() {
       {/* Add Form */}
       {showAddForm && (
         <InventoryForm
+          isSaving={Array.from(pendingOps).some(id => id.startsWith('temp_'))}
           onSave={(data) => {
             addItem(data);
             setShowAddForm(false);
@@ -231,6 +242,7 @@ export default function InventoryPage() {
              <InventoryForm
                key={item.id}
                initial={item}
+               isSaving={pendingOps.has(item.id)}
                onSave={(data) => {
                  updateItem(item.id, data);
                  setEditingId(null);
@@ -240,7 +252,7 @@ export default function InventoryPage() {
            ) : (
              <div 
                key={item.id} 
-               className="flex items-center justify-between p-3.5 rounded-2xl shadow-sm transition-all"
+               className={`flex items-center justify-between p-3.5 rounded-2xl shadow-sm transition-all ${pendingOps.has(item.id) ? 'opacity-60' : ''}`}
                style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
              >
                 <div className="flex-1 min-w-0 pr-3">
@@ -257,12 +269,12 @@ export default function InventoryPage() {
                        <span>Alert at: {fmtQty(item.lowStockThreshold)} {item.unit}</span>
                    </div>
                 </div>
-                
-                <div className="flex items-center gap-1.5 shrink-0">
+                                <div className="flex items-center gap-1.5 shrink-0">
                     {perms.write && (
                       <button
                         onClick={() => { setEditingId(item.id); setShowAddForm(false); }}
-                        className="w-8 h-8 rounded-xl flex items-center justify-center transition-colors"
+                        disabled={pendingOps.has(item.id)}
+                        className="w-8 h-8 rounded-xl flex items-center justify-center transition-colors disabled:opacity-40"
                         style={{ background: "var(--accent-soft)", color: "var(--accent)" }}
                       >
                         <Pencil size={14} />
@@ -275,10 +287,11 @@ export default function InventoryPage() {
                              deleteItem(item.id);
                           }
                         }}
-                        className="w-8 h-8 rounded-xl flex items-center justify-center transition-colors"
+                        disabled={pendingOps.has(item.id)}
+                        className="w-8 h-8 rounded-xl flex items-center justify-center transition-colors disabled:opacity-40"
                         style={{ background: "var(--red-soft)", color: "var(--red)" }}
                       >
-                        <Trash2 size={14} />
+                        {pendingOps.has(item.id) ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
                       </button>
                     )}
                 </div>

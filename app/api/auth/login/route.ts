@@ -9,6 +9,7 @@ export async function POST(req: NextRequest) {
 
     const user = await prisma.user.findUnique({
       where: { username },
+      include: { branch: true },
     });
 
     if (!user) {
@@ -26,6 +27,7 @@ export async function POST(req: NextRequest) {
       role: user.role,
       permissions: (user as any).permissions,
       branchId: user.branchId,
+      branchName: user.branch?.name,
     };
 
     const token = await encrypt(sessionData);

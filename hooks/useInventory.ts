@@ -4,12 +4,21 @@ import { useState, useEffect, useCallback } from "react";
 import { InventoryItem } from "@/types";
 import { getItem, setItem, KEYS, branchKey } from "@/lib/storage";
 import { generateId } from "@/lib/utils";
+import toast from "react-hot-toast";
 
 let sessionInventoryFetched = false;
 
 export function useInventory() {
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   const [initialized, setInitialized] = useState(false);
+  const [pendingOps, setPendingOps] = useState<Set<string>>(new Set());
+
+  const addPending = useCallback((id: string) => setPendingOps((prev) => new Set(prev).add(id)), []);
+  const removePending = useCallback((id: string) => setPendingOps((prev) => {
+    const next = new Set(prev);
+    next.delete(id);
+    return next;
+  }), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -64,15 +73,30 @@ export function useInventory() {
       return updated;
     });
 
+    addPending(newItem.id);
     fetch("/api/inventory", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(newItem),
-    }).catch((err) => console.error("Failed to save inventory item:", err));
-  }, []);
+    })
+      .then((res) => { if (res.ok) toast.success("Inventory item added"); else throw new Error(); })
+      .catch((err) => { 
+        console.error("Failed to save inventory item:", err); 
+        toast.error("Failed to add inventory item. Reverting..."); 
+        setInventoryItems(prev => {
+           const reverted = prev.filter(i => i.id !== newItem.id);
+           setItem(branchKey(KEYS.CACHE_INVENTORY), reverted);
+           return reverted;
+        });
+      })
+      .finally(() => removePending(newItem.id));
+  }, [addPending, removePending]);
 
   const updateItem = useCallback((id: string, data: Partial<Omit<InventoryItem, "id">>) => {
+    let original: InventoryItem | undefined;
+    addPending(id);
     setInventoryItems((prev) => {
+      original = prev.find(i => i.id === id);
       const updated = prev.map((item) => (item.id === id ? { ...item, ...data } : item));
       setItem(branchKey(KEYS.CACHE_INVENTORY), updated);
       return updated;
@@ -82,20 +106,47 @@ export function useInventory() {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id, ...data }),
-    }).catch((err) => console.error("Failed to update inventory item:", err));
-  }, []);
+    })
+      .then((res) => { if (res.ok) toast.success("Inventory item updated"); else throw new Error(); })
+      .catch((err) => { 
+        console.error("Failed to update inventory item:", err); 
+        toast.error("Failed to update inventory item. Reverting..."); 
+        if (original) {
+           setInventoryItems(prev => {
+              const reverted = prev.map(i => i.id === id ? original! : i);
+              setItem(branchKey(KEYS.CACHE_INVENTORY), reverted);
+              return reverted;
+           });
+        }
+      })
+      .finally(() => removePending(id));
+  }, [addPending, removePending]);
 
   const deleteItem = useCallback((id: string) => {
+    let deleted: InventoryItem | undefined;
     setInventoryItems((prev) => {
+      deleted = prev.find(i => i.id === id);
       const updated = prev.filter((item) => item.id !== id);
       setItem(branchKey(KEYS.CACHE_INVENTORY), updated);
       return updated;
     });
 
-    fetch(`/api/inventory?id=${id}`, { method: "DELETE" }).catch((err) =>
-      console.error("Failed to delete inventory item:", err)
-    );
-  }, []);
+    addPending(id);
+    fetch(`/api/inventory?id=${id}`, { method: "DELETE" })
+      .then((res) => { if (res.ok) toast.success("Inventory item deleted"); else throw new Error(); })
+      .catch((err) => { 
+        console.error("Failed to delete inventory item:", err); 
+        toast.error("Failed to delete inventory item. Reverting..."); 
+        if (deleted) {
+           setInventoryItems(prev => {
+              const reverted = [...prev, deleted!];
+              setItem(branchKey(KEYS.CACHE_INVENTORY), reverted);
+              return reverted;
+           });
+        }
+      })
+      .finally(() => removePending(id));
+  }, [addPending, removePending]);
 
   const deductStock = useCallback((sales: { product: any; quantity: number }[]) => {
     // Optimistic immediate UI update
@@ -146,6 +197,7 @@ export function useInventory() {
     inventoryItems,
     lowStockItems,
     initialized,
+    pendingOps,
     addItem,
     updateItem,
     deleteItem,

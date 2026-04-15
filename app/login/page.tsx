@@ -31,16 +31,35 @@ export default function LoginPage() {
       }
 
       const data = await res.json();
-      ['tst_cache_products', 'tst_cache_categories', 'tst_cache_transactions', 'tst_cache_expenses', 'tst_cache_inventory'].forEach(k => localStorage.removeItem(k));
+      
+      // Import clearBranchCache dynamically or replace with logic
+      // But we can just wipe all tst_cache_ keys here directly
+      const toRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith("tst_cache_")) toRemove.push(k);
+      }
+      toRemove.forEach(k => localStorage.removeItem(k));
+
+      // Explicitly purge active branch artifacts so we don't bleed previous logins
+      localStorage.removeItem('active_branch_id');
+      localStorage.removeItem('active_branch_name');
+      document.cookie = 'active_branch_id=; Max-Age=0; path=/;';
+
       localStorage.setItem('user_role', data.user.role);
       localStorage.setItem('user_permissions', JSON.stringify(data.user.permissions || {}));
+      
+      if (data.user.branchId) {
+        localStorage.setItem('active_branch_id', data.user.branchId);
+        localStorage.setItem('active_branch_name', data.user.branchName || "Branch");
+        document.cookie = `active_branch_id=${data.user.branchId}; path=/;`;
+      }
 
       if (data.user.role?.includes("SUPER_ADMIN")) {
-        router.push("/super-admin");
+        window.location.href = "/super-admin";
       } else {
-        router.push("/");
+        window.location.href = "/";
       }
-      router.refresh();
     } catch (err) {
       setError("An unexpected error occurred.");
       setLoading(false);

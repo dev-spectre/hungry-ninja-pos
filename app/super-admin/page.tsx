@@ -44,12 +44,12 @@ export default function SuperAdminDashboard() {
   }, [users]);
 
   const fetchBranches = async () => {
-    const res = await fetch("/api/branch");
+    const res = await fetch("/api/branch", { headers: { "x-requested-branch": "GLOBAL" } });
     if (res.ok) setBranches(await res.json());
   };
 
   const fetchUsers = async () => {
-    const res = await fetch("/api/users");
+    const res = await fetch("/api/users", { headers: { "x-requested-branch": "GLOBAL" } });
     if (res.ok) setUsers(await res.json());
   };
 

@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import QRCode from "qrcode";
-import { Download, Plus, RefreshCcw, ToggleLeft, ToggleRight, X } from "lucide-react";
+import { Download, Plus, RefreshCcw, ToggleLeft, ToggleRight, X, Loader2 } from "lucide-react";
+import toast from "react-hot-toast";
 
 type TableModel = {
   id: string;
@@ -30,6 +31,14 @@ export default function AdminTablesPage() {
   const [bulkQrOpen, setBulkQrOpen] = useState(false);
   const [bulkQrItems, setBulkQrItems] = useState<Array<{ name: string; url: string }>>([]);
   const [bulkQrRendered, setBulkQrRendered] = useState<Array<{ name: string; url: string; dataUrl: string }>>([]);
+  const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
+
+  const addPending = (id: string) => setPendingIds(prev => new Set(prev).add(id));
+  const removePending = (id: string) => setPendingIds(prev => {
+     const next = new Set(prev);
+     next.delete(id);
+     return next;
+  });
 
   const [qrOpen, setQrOpen] = useState(false);
   const [qrTable, setQrTable] = useState<TableModel | null>(null);
@@ -90,25 +99,44 @@ export default function AdminTablesPage() {
 
   const createTable = useCallback(async () => {
     if (!newName.trim() || saving) return;
+    const tempId = `temp-${Date.now()}`;
+    const name = newName.trim();
+    
     setSaving(true);
+    setAddOpen(false);
+    setNewName("");
     setError(null);
+    
+    // Optimistic insert
+    const tempTable: TableModel = {
+       id: tempId,
+       name,
+       branchId: "",
+       qrToken: "",
+       isActive: true,
+       createdAt: new Date().toISOString()
+    };
+    setTables(prev => [tempTable, ...prev]);
+
     try {
       const res = await fetch("/api/admin/tables", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newName.trim() }),
+        body: JSON.stringify({ name }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error || "Failed to create table");
-      setAddOpen(false);
-      setNewName("");
-      await refresh();
+      
+      // Replace temp with real
+      setTables(prev => prev.map(t => t.id === tempId ? data : t));
     } catch (e: any) {
       setError(e?.message ?? "Failed to create table");
+      // Rollback
+      setTables(prev => prev.filter(t => t.id !== tempId));
     } finally {
       setSaving(false);
     }
-  }, [newName, saving, refresh]);
+  }, [newName, saving]);
 
   const createBulk = useCallback(async () => {
     if (bulkWorking) return;
@@ -210,40 +238,62 @@ export default function AdminTablesPage() {
 
   const toggleActive = useCallback(
     async (t: TableModel) => {
+      if (pendingIds.has(t.id)) return;
       setError(null);
-      const res = await fetch(`/api/admin/tables/${encodeURIComponent(t.id)}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isActive: !t.isActive }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        setError(data?.error || "Failed to update table");
-        return;
+      addPending(t.id);
+      
+      const nextActive = !t.isActive;
+      // Optimistic update
+      setTables(prev => prev.map(item => item.id === t.id ? { ...item, isActive: nextActive } : item));
+
+      try {
+         const res = await fetch(`/api/admin/tables/${encodeURIComponent(t.id)}`, {
+           method: "PATCH",
+           headers: { "Content-Type": "application/json" },
+           body: JSON.stringify({ isActive: nextActive }),
+         });
+         if (!res.ok) {
+           throw new Error("Failed to update status");
+         }
+      } catch (e: any) {
+         setError(e?.message || "Failed to update table");
+         // Rollback
+         setTables(prev => prev.map(item => item.id === t.id ? { ...item, isActive: !nextActive } : item));
+      } finally {
+         removePending(t.id);
       }
-      await refresh();
     },
-    [refresh],
+    [pendingIds],
   );
 
   const regenerate = useCallback(
     async (t: TableModel) => {
       const ok = window.confirm("Regenerate QR token? Old printed QR codes will stop working.");
       if (!ok) return;
+      if (pendingIds.has(t.id)) return;
+      
       setError(null);
-      const res = await fetch(`/api/admin/tables/${encodeURIComponent(t.id)}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "regenerate" }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        setError(data?.error || "Failed to regenerate");
-        return;
+      addPending(t.id);
+      try {
+         const res = await fetch(`/api/admin/tables/${encodeURIComponent(t.id)}`, {
+           method: "PATCH",
+           headers: { "Content-Type": "application/json" },
+           body: JSON.stringify({ action: "regenerate" }),
+         });
+         const data = await res.json().catch(() => null);
+         if (!res.ok) {
+           throw new Error(data?.error || "Failed to regenerate");
+         }
+         // Update with new data (token)
+         setTables(prev => prev.map(item => item.id === t.id ? data : item));
+         toast.success("QR Token regenerated");
+      } catch (e: any) {
+         setError(e?.message || "Failed to regenerate");
+      } finally {
+         removePending(t.id);
       }
-      await refresh();
     },
-    [refresh],
+    [pendingIds],
   );
 
   return (
@@ -363,7 +413,8 @@ export default function AdminTablesPage() {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => openQr(t)}
-                    className="px-3 py-2 rounded-xl text-xs font-extrabold flex items-center gap-2"
+                    disabled={pendingIds.has(t.id)}
+                    className="px-3 py-2 rounded-xl text-xs font-extrabold flex items-center gap-2 disabled:opacity-40"
                     style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
                   >
                     <Download size={14} />
@@ -371,19 +422,21 @@ export default function AdminTablesPage() {
                   </button>
                   <button
                     onClick={() => regenerate(t)}
-                    className="px-3 py-2 rounded-xl text-xs font-extrabold flex items-center gap-2"
+                    disabled={pendingIds.has(t.id)}
+                    className="px-3 py-2 rounded-xl text-xs font-extrabold flex items-center gap-2 disabled:opacity-40"
                     style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
                   >
-                    <RefreshCcw size={14} />
+                    {pendingIds.has(t.id) ? <Loader2 size={14} className="animate-spin" /> : <RefreshCcw size={14} />}
                     Regenerate
                   </button>
                   <button
                     onClick={() => toggleActive(t)}
-                    className="w-11 h-11 rounded-2xl flex items-center justify-center"
+                    disabled={pendingIds.has(t.id)}
+                    className="w-11 h-11 rounded-2xl flex items-center justify-center disabled:opacity-40"
                     style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: t.isActive ? "var(--green)" : "var(--text-muted)" }}
                     aria-label="Toggle active"
                   >
-                    {t.isActive ? <ToggleRight size={18} /> : <ToggleLeft size={18} />}
+                    {pendingIds.has(t.id) ? <Loader2 size={18} className="animate-spin" /> : (t.isActive ? <ToggleRight size={18} /> : <ToggleLeft size={18} />)}
                   </button>
                 </div>
               </div>

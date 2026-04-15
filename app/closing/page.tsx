@@ -175,7 +175,10 @@ export default function ClosingPage() {
       ["  Card Sales", "", "", formatCurrency(report.summary.cardSales)],
       ["", "", "", ""],
       ["Total Items Sold", "", "", report.summary.totalItems.toString()],
-      ["Total Bills", "", "", report.transactionCount.toString()],
+      ["No. of Orders", "", "", report.transactionCount.toString()],
+      ["  Cash Orders", "", "", report.transactions.filter(t => t.paymentMode === "cash").length.toString()],
+      ["  UPI Orders", "", "", report.transactions.filter(t => t.paymentMode === "upi").length.toString()],
+      ["  Card Orders", "", "", report.transactions.filter(t => t.paymentMode === "card").length.toString()],
       ["Total Expenses", "", "", formatCurrency(report.totalExpenses)],
       ["", "", "", ""],
       ["NET PROFIT", "", "", formatCurrency(report.netProfit)],
@@ -419,7 +422,10 @@ export default function ClosingPage() {
               <ReportRow icon={Smartphone} label="UPI Collected" value={formatCurrency(report.summary.upiSales)} color="var(--yellow)" />
               <ReportRow icon={CreditCard} label="Card Collected" value={formatCurrency(report.summary.cardSales)} color="var(--blue)" />
               <ReportRow icon={ShoppingBag} label="Total Items Sold" value={report.summary.totalItems.toString()} color="var(--purple)" />
-              <ReportRow icon={FileBarChart} label="Bills Count" value={report.transactionCount.toString()} />
+              <ReportRow icon={FileBarChart} label="No. of Orders" value={report.transactionCount.toString()} />
+              <ReportRow icon={Banknote} label="Cash Orders" value={report.transactions.filter(t => t.paymentMode === "cash").length.toString()} color="var(--green)" />
+              <ReportRow icon={Smartphone} label="UPI Orders" value={report.transactions.filter(t => t.paymentMode === "upi").length.toString()} color="var(--yellow)" />
+              <ReportRow icon={CreditCard} label="Card Orders" value={report.transactions.filter(t => t.paymentMode === "card").length.toString()} color="var(--blue)" />
               <ReportRow icon={Receipt} label="Total Expenses" value={formatCurrency(report.totalExpenses)} color="var(--orange)" />
               <div className="flex items-center justify-between py-3">
                 <div className="flex items-center gap-2">

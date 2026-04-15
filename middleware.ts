@@ -4,7 +4,7 @@ import { decrypt } from '@/lib/session'
 
 const publicPaths = ['/login', '/api/auth/login', '/api/auth/me', '/manifest.json', '/favicon.ico']
 
-export async function proxy(req: NextRequest) {
+export async function middleware(req: NextRequest) {
   const rawPath = req.nextUrl.pathname
   const path = rawPath.endsWith('/') && rawPath !== '/' ? rawPath.slice(0, -1) : rawPath;
   
@@ -36,13 +36,19 @@ export async function proxy(req: NextRequest) {
       if (session.permissions) {
           requestHeaders.set('x-user-permissions', JSON.stringify(session.permissions))
       }
-      if (session.branchId) {
-          requestHeaders.set('x-user-branch', session.branchId)
-      } else if (session.role.includes('SUPER_ADMIN')) {
-          const activeBranch = req.cookies.get('active_branch_id')?.value;
-          if (activeBranch) {
-              requestHeaders.set('x-user-branch', activeBranch)
+      if (session.role.includes('SUPER_ADMIN')) {
+          const clientRequestedBranch = req.headers.get('x-requested-branch');
+          if (clientRequestedBranch === 'GLOBAL') {
+              // Intentionally bypass scoping for global admin view
+          } else {
+              // Use requested branch, fallback to cookie, then fallback to session's default branch
+              const activeBranch = clientRequestedBranch || req.cookies.get('active_branch_id')?.value || session.branchId;
+              if (activeBranch) {
+                  requestHeaders.set('x-user-branch', activeBranch)
+              }
           }
+      } else if (session.branchId) {
+          requestHeaders.set('x-user-branch', session.branchId)
       }
   }
 

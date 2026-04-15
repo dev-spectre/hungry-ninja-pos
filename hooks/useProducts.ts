@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Category, Product } from "@/types";
 import { getItem, setItem, KEYS, branchKey } from "@/lib/storage";
 import { generateId } from "@/lib/utils";
+import toast from "react-hot-toast";
 
 // In-memory flags to prevent redundant DB fetches across page navigations
 let sessionProductsFetched = false;
@@ -12,6 +13,14 @@ export function useProducts() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [initialized, setInitialized] = useState(false);
+  const [pendingOps, setPendingOps] = useState<Set<string>>(new Set());
+
+  const addPending = useCallback((id: string) => setPendingOps((prev) => new Set(prev).add(id)), []);
+  const removePending = useCallback((id: string) => setPendingOps((prev) => {
+    const next = new Set(prev);
+    next.delete(id);
+    return next;
+  }), []);
 
   // Load cached data instantly, then refresh from DB
   useEffect(() => {
@@ -68,6 +77,7 @@ export function useProducts() {
         return updated;
       });
 
+      addPending(newProduct.id);
       (async () => {
          try {
            const res = await fetch("/api/products", {
@@ -85,18 +95,21 @@ export function useProducts() {
              });
              if (!resIng.ok) throw new Error("Ingredients rejection");
            }
+           toast.success("Product added successfully");
          } catch (err) {
            console.error("Failed to add product:", err);
-           alert("Couldn't add product to the database. Please try again later.");
+           toast.error("Couldn't add product to the database.");
            setProducts((prev) => {
              const reverted = prev.filter(p => p.id !== newProduct.id);
              setItem(branchKey(KEYS.CACHE_PRODUCTS), reverted);
              return reverted;
            });
+         } finally {
+            removePending(newProduct.id);
          }
       })();
     },
-    []
+    [addPending, removePending]
   );
 
   const updateProduct = useCallback(
@@ -109,6 +122,7 @@ export function useProducts() {
         return updated;
       });
 
+      addPending(id);
       (async () => {
          try {
            const res = await fetch("/api/products", {
@@ -126,18 +140,21 @@ export function useProducts() {
              });
              if (!resIng.ok) throw new Error("Ingredients update rejection");
            }
+           toast.success("Product updated successfully");
          } catch (err) {
            console.error("Failed to update product:", err);
-           alert("Couldn't update the product. Reverting changes...");
+           toast.error("Couldn't update the product. Reverting changes...");
            setProducts((prev) => {
              const reverted = prev.map(p => p.id === id ? { ...p, ...(originalProduct || {}) } : p);
              setItem(branchKey(KEYS.CACHE_PRODUCTS), reverted);
              return reverted;
            });
+         } finally {
+            removePending(id);
          }
       })();
     },
-    []
+    [addPending, removePending]
   );
 
   const deleteProduct = useCallback(
@@ -150,11 +167,13 @@ export function useProducts() {
         return updated;
       });
 
+      addPending(id);
       fetch(`/api/products?id=${id}`, { method: "DELETE" }).then(res => {
          if (!res.ok) throw new Error("Delete failed");
+         toast.success("Product deleted successfully");
       }).catch((err) => {
         console.error("Failed to delete product:", err);
-        alert("Couldn't delete product. Reverting...");
+        toast.error("Couldn't delete product. Reverting...");
         if (deletedItem) {
           setProducts((prev) => {
             const reverted = [...prev, deletedItem!];
@@ -162,9 +181,11 @@ export function useProducts() {
             return reverted;
           });
         }
+      }).finally(() => {
+         removePending(id);
       });
     },
-    []
+    [addPending, removePending]
   );
 
   const toggleActive = useCallback(
@@ -184,17 +205,32 @@ export function useProducts() {
       });
 
       // Synchronous execution outside React Strict Mode updater
+      addPending(id);
       setTimeout(() => {
          if (newActive !== null) {
             fetch("/api/products", {
               method: "PUT",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ id, active: newActive }),
-            }).catch((err) => console.error("Failed to toggle product:", err));
+            })
+            .then(res => { if (!res.ok) throw new Error(); })
+            .catch((err) => {
+               console.error("Failed to toggle product:", err);
+               // Revert optimistic UI
+               setProducts(prev => {
+                  const reverted = prev.map(p => p.id === id ? { ...p, active: !newActive } : p);
+                  setItem(branchKey(KEYS.CACHE_PRODUCTS), reverted);
+                  return reverted;
+               });
+               toast.error("Sync failed. Reverted toggle.");
+            })
+            .finally(() => removePending(id));
+         } else {
+            removePending(id);
          }
       }, 0);
     },
-    []
+    [addPending, removePending]
   );
 
   const incrementFrequency = useCallback(
@@ -240,8 +276,12 @@ export function useProducts() {
       const id = generateId();
       let didMutate = false;
 
+      addPending(id);
       setCategories((prev) => {
-        if (prev.some((c) => c.name.toLowerCase() === name.toLowerCase())) return prev;
+        if (prev.some((c) => c.name.toLowerCase() === name.toLowerCase())) {
+          removePending(id);
+          return prev;
+        }
         const newCat: Category = { id, name };
         const updated = [...prev, newCat];
         setItem(branchKey(KEYS.CACHE_CATEGORIES), updated);
@@ -256,16 +296,32 @@ export function useProducts() {
              method: "POST",
              headers: { "Content-Type": "application/json" },
              body: JSON.stringify({ id, name }),
-           }).catch((err) => console.error("Failed to save category:", err));
+           })
+           .then((res) => { if (res.ok) toast.success("Category added"); else throw new Error(); })
+           .catch((err) => { 
+              console.error("Failed to save category:", err); 
+              toast.error("Failed to save category. Reverting...");
+              setCategories(prev => {
+                 const reverted = prev.filter(c => c.id !== id);
+                 setItem(branchKey(KEYS.CACHE_CATEGORIES), reverted);
+                 return reverted;
+              });
+           })
+           .finally(() => removePending(id));
+        } else {
+           removePending(id);
         }
       }, 0);
     },
-    []
+    [addPending, removePending]
   );
 
   const updateCategory = useCallback(
     (id: string, name: string) => {
+      let originalCat: Category | undefined;
+      addPending(id);
       setCategories((prev) => {
+        originalCat = prev.find(c => c.id === id);
         const updated = prev.map((c) => (c.id === id ? { ...c, name } : c));
         setItem(branchKey(KEYS.CACHE_CATEGORIES), updated);
         return updated;
@@ -275,29 +331,66 @@ export function useProducts() {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, name }),
-      }).catch((err) => console.error("Failed to update category:", err));
+      })
+      .then((res) => { if (res.ok) toast.success("Category updated"); else throw new Error(); })
+      .catch((err) => { 
+         console.error("Failed to update category:", err); 
+         toast.error("Update failed. Reverting...");
+         if (originalCat) {
+            setCategories(prev => {
+               const reverted = prev.map(c => c.id === id ? originalCat! : c);
+               setItem(branchKey(KEYS.CACHE_CATEGORIES), reverted);
+               return reverted;
+            });
+         }
+      })
+      .finally(() => removePending(id));
     },
-    []
+    [addPending, removePending]
   );
 
   const deleteCategory = useCallback(
     (id: string) => {
+      addPending(id);
+      let deletedCat: Category | undefined;
+      let deletedProds: Product[] = [];
+
       setCategories((prev) => {
+        deletedCat = prev.find(c => c.id === id);
         const updated = prev.filter((c) => c.id !== id);
         setItem(branchKey(KEYS.CACHE_CATEGORIES), updated);
         return updated;
       });
       setProducts((prev) => {
+        deletedProds = prev.filter((p) => p.categoryId === id);
         const updated = prev.filter((p) => p.categoryId !== id);
         setItem(branchKey(KEYS.CACHE_PRODUCTS), updated);
         return updated;
       });
 
-      fetch(`/api/categories?id=${id}`, { method: "DELETE" }).catch((err) =>
-        console.error("Failed to delete category:", err)
-      );
+      fetch(`/api/categories?id=${id}`, { method: "DELETE" })
+        .then((res) => { if (res.ok) toast.success("Category deleted"); else throw new Error(); })
+        .catch((err) => { 
+           console.error("Failed to delete category:", err); 
+           toast.error("Delete failed. Reverting...");
+           if (deletedCat) {
+              setCategories(prev => {
+                 const reverted = [...prev, deletedCat!];
+                 setItem(branchKey(KEYS.CACHE_CATEGORIES), reverted);
+                 return reverted;
+              });
+           }
+           if (deletedProds.length > 0) {
+              setProducts(prev => {
+                 const reverted = [...prev, ...deletedProds];
+                 setItem(branchKey(KEYS.CACHE_PRODUCTS), reverted);
+                 return reverted;
+              });
+           }
+        })
+        .finally(() => removePending(id));
     },
-    []
+    [addPending, removePending]
   );
 
   const getProductsByCategory = useCallback(
@@ -317,6 +410,7 @@ export function useProducts() {
     products,
     categories,
     initialized,
+    pendingOps,
     addProduct,
     updateProduct,
     deleteProduct,

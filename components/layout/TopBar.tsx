@@ -26,10 +26,12 @@ export default function TopBar() {
   const { isDark, toggle } = useTheme();
   
   const [role, setRole] = useState<string | null>(null);
+  const [branchName, setBranchName] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setRole(localStorage.getItem('user_role'));
+    setBranchName(localStorage.getItem('active_branch_name'));
     setMounted(true);
   }, [pathname]);
 
@@ -50,13 +52,20 @@ export default function TopBar() {
         borderBottom: "1px solid var(--border)",
         height: "52px",
       }}>
-      <div className="flex items-center gap-2">
-        <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white font-bold text-sm" style={{ background: "linear-gradient(135deg, var(--accent), #8b5cf6)" }}>
-          T
+      <div className="flex items-center gap-3">
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-sm shadow-sm" style={{ background: "linear-gradient(135deg, var(--accent), #8b5cf6)" }}>
+          HN
         </div>
-        <span className="font-semibold text-base" style={{ color: "var(--text-primary)" }}>
-          {title}
-        </span>
+        <div className="flex flex-col justify-center">
+          <span className="font-semibold text-sm leading-tight" style={{ color: "var(--text-primary)" }}>
+            {title}
+          </span>
+          {branchName && (
+             <span className="text-[11px] font-bold tracking-wide uppercase mt-0.5" style={{ color: "var(--accent)" }}>
+               {branchName}
+             </span>
+          )}
+        </div>
       </div>
       <div className="ml-auto flex items-center gap-4">
         {role?.includes("SUPER_ADMIN") && (
